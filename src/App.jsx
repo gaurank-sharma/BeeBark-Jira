@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Trash2, Plus, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
 import logo from './assets/logo.png'; // Ensure you have a logo or this will use the fallback 'B'
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://bee-bark-jira-backend.vercel.app/api';
 
 // --- AXIOS CONFIGURATION ---
 // Automatically attach token to every request if it exists

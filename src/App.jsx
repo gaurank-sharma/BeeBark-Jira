@@ -514,7 +514,7 @@ import {
 } from 'lucide-react';
 import logo from './assets/logo.png'; 
 
-// Use your localhost URL for development to avoid CORS with Vercel during dev
+// Use your localhost URL for development
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api'; 
 
 // --- AXIOS CONFIGURATION ---
@@ -537,7 +537,6 @@ axios.interceptors.response.use(
 
 // --- HELPER: GENERATE TASK ID ---
 const generateTaskId = () => {
-  // Generates BB-1000 to BB-9999
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   return `BB-${randomNum}`;
 };
@@ -626,7 +625,7 @@ function BoardView({ currentUser, filter }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                     type="text" 
-                    placeholder="Search by Title or Ticket ID (e.g., BB-0001)..." 
+                    placeholder="Search by Title or Ticket ID (e.g., BB-1234)..." 
                     className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-yellow-400 outline-none"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -682,151 +681,200 @@ function BoardView({ currentUser, filter }) {
   );
 }
 
-// --- TASK DETAIL MODAL ---
+// --- TASK DETAIL MODAL (Redesigned to Match Creation Modal) ---
 function TaskDetailModal({ task, onClose, onUpdate, users }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ ...task });
+  const [loading, setLoading] = useState(false);
+  const [editForm, setEditForm] = useState({
+     ...task,
+     assigneeId: task.assignee?._id || task.assignee || "",
+     reporterId: task.reporter?._id || task.reporter || "",
+     startDate: task.startDate ? task.startDate.split('T')[0] : "",
+     deadline: task.deadline ? task.deadline.split('T')[0] : ""
+  });
 
   const handleSave = async () => {
+    setLoading(true);
     try {
         await axios.put(`${API_URL}/tasks/${task._id}`, {
             title: editForm.title,
             description: editForm.description,
             priority: editForm.priority,
-            assigneeId: editForm.assignee?._id || editForm.assignee,
-            reporterId: editForm.reporter?._id || editForm.reporter,
-            status: editForm.status
+            pod: editForm.pod,
+            status: editForm.status,
+            assigneeId: editForm.assigneeId,
+            startDate: editForm.startDate,
+            deadline: editForm.deadline,
         });
         onUpdate();
-        setIsEditing(false);
         onClose();
     } catch (err) { alert("Failed to update task"); }
+    finally { setLoading(false); }
   };
 
   if (!task) return null;
 
+  const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <div className="flex items-center gap-3 w-full">
-             <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded border border-slate-300">
-                {task.taskId || 'NO-ID'}
-             </span>
-             {isEditing ? (
-                 <input className="font-bold text-xl bg-white border border-slate-300 rounded px-2 w-full" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
-             ) : (
-                 <>
-                    <h2 className="text-xl font-bold text-slate-900 leading-tight">{task.title}</h2>
-                    <button onClick={() => setIsEditing(true)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500" title="Edit">
-                        <Edit2 size={16} />
-                    </button>
-                 </>
-             )}
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition text-slate-500 ml-4"><X size={20} /></button>
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
+        {/* HEADER */}
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                Task Details 
+                {/* ID DISPLAY FIX */}
+                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-sm font-medium border border-slate-200">
+                    {task.taskId || 'NO-ID'}
+                </span>
+            </h2>
+            <div className="flex gap-4 items-center">
+                <button 
+                    onClick={handleSave} 
+                    disabled={loading}
+                    className="bg-slate-900 text-white px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2"
+                >
+                    {loading && <Loader2 className="animate-spin" size={14} />} Save Changes
+                </button>
+                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+            </div>
         </div>
 
-        <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
-            <div>
-               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><FileText size={14}/> Description</h3>
-               {isEditing ? (
-                   <textarea className="w-full border p-2 rounded h-32" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
-               ) : (
-                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{task.description || "No description provided."}</div>
-               )}
-            </div>
+        {/* BODY (Split Layout) */}
+        <div className="flex flex-1 overflow-hidden">
+            {/* LEFT: CONTENT */}
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
+                 <input 
+                    className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" 
+                    placeholder="Issue Title" 
+                    value={editForm.title} 
+                    onChange={e => setEditForm({...editForm, title: e.target.value})} 
+                 />
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Status</label>
-                  <div className="font-bold text-slate-800 mt-1">{task.status}</div>
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Reporter</label>
-                  {isEditing ? (
-                      <select className="w-full border bg-white rounded mt-1 text-sm p-1" value={editForm.reporter?._id || editForm.reporter} onChange={e => setEditForm({...editForm, reporter: e.target.value})}>
-                          {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                      </select>
-                  ) : (
-                      <div className="font-bold text-slate-800 mt-1 flex items-center gap-1"><UserIcon size={14} className="text-slate-400"/>{task.reporter?.username || 'Unknown'}</div>
-                  )}
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Priority</label>
-                  {isEditing ? (
-                      <select className="w-full border bg-white rounded mt-1 text-sm p-1" value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value})}>
-                          <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
-                      </select>
-                  ) : (
-                      <div className="font-bold text-slate-800 mt-1">{task.priority}</div>
-                  )}
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Deadline</label>
-                  <div className={`font-bold mt-1 flex items-center gap-1 ${new Date(task.deadline) < new Date() ? 'text-red-600' : 'text-slate-800'}`}>
-                     <Clock size={14}/> {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'None'}
-                  </div>
-               </div>
-            </div>
+                 <div className="mb-6">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+                        <FileText size={14} /> Description
+                    </label>
+                    <textarea 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-64 outline-none focus:ring-2 focus:ring-slate-200 text-slate-700 resize-none" 
+                        value={editForm.description} 
+                        onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                    />
+                 </div>
 
-            <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assigned To</h3>
-                {isEditing ? (
-                      <select className="w-full border bg-white rounded p-2" value={editForm.assignee?._id || editForm.assignee || ""} onChange={e => setEditForm({...editForm, assignee: e.target.value})}>
-                         <option value="">Unassigned</option>
-                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                      </select>
-                ) : (
-                    task.assignee ? (
-                        <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-sm w-fit">
-                            <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 text-lg">{task.assignee.username[0].toUpperCase()}</div>
-                            <div><div className="font-bold text-slate-900">{task.assignee.username}</div><div className="text-xs text-slate-500">{task.assignee.email}</div></div>
-                        </div>
-                    ) : <div className="text-sm text-slate-400 italic">No one assigned yet.</div>
-                )}
-            </div>
-
-            <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Paperclip size={14}/> Attachments ({task.attachments?.length || 0})</h3>
-                {task.attachments && task.attachments.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        {task.attachments.map((file, idx) => {
-                             const isPdf = (file.format && file.format.includes('pdf')) || 
-                                            (file.url && file.url.toLowerCase().endsWith('.pdf')) ||
-                                            (file.name && file.name.toLowerCase().endsWith('.pdf'));
-                             
-                             const isImage = !isPdf;
-
-                             return (
-                                <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden group relative bg-slate-50">
-                                    {isImage ? (
-                                        <img src={file.url} alt={file.name} className="w-full h-32 object-cover" />
-                                    ) : (
-                                        <div className="w-full h-32 flex flex-col items-center justify-center text-slate-500 p-2 text-center bg-slate-100">
-                                            <FileText size={32} className="text-red-500 mb-2" />
-                                            <span className="text-xs font-bold text-slate-700 truncate w-full">{file.name || 'Document'}</span>
-                                            <span className="text-[10px] uppercase text-slate-400">PDF Document</span>
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white rounded-full hover:bg-yellow-400 transition shadow-lg" title="Open File">
-                                            <ExternalLink size={20} className="text-slate-900" />
-                                        </a>
+                 <div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+                        <Paperclip size={14} /> Attachments ({task.attachments?.length || 0})
+                    </label>
+                    {task.attachments && task.attachments.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-4 mt-2">
+                            {task.attachments.map((file, idx) => (
+                                <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+                                    <div className="bg-red-50 p-2 rounded text-red-500"><FileText size={18}/></div>
+                                    <div className="overflow-hidden">
+                                        <div className="text-sm font-bold text-slate-700 truncate">{file.name}</div>
+                                        <div className="text-xs text-slate-400 uppercase">{file.format?.split('/')[1] || 'FILE'}</div>
                                     </div>
-                                </div>
-                             )
-                        })}
-                    </div>
-                ) : <div className="p-4 border border-dashed border-slate-200 rounded-lg text-center text-sm text-slate-400">No attachments found.</div>}
+                                </a>
+                            ))}
+                        </div>
+                    ) : <div className="text-sm text-slate-400 italic">No attachments.</div>}
+                 </div>
             </div>
 
-            {isEditing && (
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 bg-slate-900 text-white rounded font-bold flex items-center gap-2"><Save size={16}/> Save Changes</button>
+            {/* RIGHT: META DETAILS */}
+            <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                
+                {/* STATUS */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
+                    <select 
+                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none"
+                        value={editForm.status} 
+                        onChange={e => setEditForm({...editForm, status: e.target.value})}
+                    >
+                        <option>To Do</option>
+                        <option>In Progress</option>
+                        <option>Blocked</option>
+                        <option>Done</option>
+                    </select>
                 </div>
-            )}
+
+                {/* PRIORITY */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Priority</label>
+                    <div className="flex gap-1">
+                        {['Low', 'Medium', 'High', 'Critical'].map(p => (
+                            <button 
+                                key={p}
+                                onClick={() => setEditForm({...editForm, priority: p})}
+                                className={`flex-1 py-1 text-[10px] uppercase font-bold border rounded transition
+                                    ${editForm.priority === p 
+                                        ? 'bg-slate-800 text-white border-slate-800' 
+                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                    }`}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* POD */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod / Team</label>
+                    <div className="relative">
+                        <select 
+                            className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+                            value={editForm.pod} 
+                            onChange={e => setEditForm({...editForm, pod: e.target.value})}
+                        >
+                            {PODS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
+                    </div>
+                </div>
+
+                {/* ASSIGNEE */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
+                    <div className="relative">
+                        <select 
+                            className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+                            value={editForm.assigneeId} 
+                            onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}
+                        >
+                            <option value="">Unassigned</option>
+                            {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        </select>
+                        <UserIcon size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
+                    </div>
+                </div>
+
+                {/* TIMELINE */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Timeline</label>
+                    <div className="bg-white border border-slate-200 rounded p-3">
+                         <div className="mb-2">
+                            <label className="text-[10px] text-slate-400 uppercase">Start Date</label>
+                            <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} />
+                         </div>
+                         <div className="pt-2 border-t border-slate-100">
+                            <label className="text-[10px] text-slate-400 uppercase">Due Date</label>
+                            <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} />
+                         </div>
+                    </div>
+                </div>
+
+                {/* REPORTER INFO */}
+                <div className="pt-4 border-t border-slate-200">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reported By</label>
+                    <div className="text-xs font-medium text-slate-600 flex items-center gap-2">
+                        <div className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">R</div>
+                        {task.reporter?.username || 'Unknown'}
+                    </div>
+                </div>
+
+            </div>
         </div>
       </div>
     </div>
@@ -840,7 +888,8 @@ function TaskCard({ task, index, onClick }) {
       {(provided, snapshot) => (
         <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} onClick={onClick} className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative cursor-pointer ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}>
           <div className="flex justify-between items-start mb-2">
-             <span className="text-[10px] font-bold text-slate-500">{task.taskId || 'BB-####'}</span>
+             {/* ID DISPLAY ON CARD */}
+             <span className="text-[10px] font-bold text-slate-500 hover:text-blue-600 transition">{task.taskId}</span>
              <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{task.priority}</span>
           </div>
           <h4 className="font-semibold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
@@ -869,7 +918,7 @@ function TaskCard({ task, index, onClick }) {
   );
 }
 
-// --- NEW CREATE TASK MODAL (Match Image Design) ---
+// --- CREATE TASK MODAL (Match Image Design) ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -882,7 +931,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
     deadline: '', 
     files: [],
     reporterId: currentUser._id,
-    taskId: generateTaskId() // Generate BB-XXXX on open
+    taskId: generateTaskId() 
   });
 
   const handleSubmit = async (e) => {
@@ -895,7 +944,6 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
     });
     
     try { 
-        // Sending taskId to backend. Ensure backend Schema accepts 'taskId' or it will just be ignored
         await axios.post(`${API_URL}/tasks`, data, { headers: { 'Content-Type': 'multipart/form-data' } }); 
         onSuccess(); 
         onClose(); 

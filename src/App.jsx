@@ -630,7 +630,7 @@ function BoardView({ currentUser, filter }) {
   );
 }
 
-// --- TASK DETAIL MODAL (Fixed File Loading) ---
+// --- TASK DETAIL MODAL ---
 function TaskDetailModal({ task, onClose, onUpdate, users }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...task });
@@ -715,7 +715,6 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
                </div>
             </div>
 
-            {/* Assignee Section */}
             <div>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assigned To</h3>
                 {isEditing ? (
@@ -733,14 +732,13 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
                 )}
             </div>
 
-            {/* Attachments Section - Updated to handle PDFs correctly */}
             <div>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Paperclip size={14}/> Attachments ({task.attachments?.length || 0})</h3>
                 {task.attachments && task.attachments.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {task.attachments.map((file, idx) => {
-                             // Check for PDF by extension OR format.
-                             const isPdf = file.format?.includes('pdf') || file.url.toLowerCase().endsWith('.pdf') || file.resource_type === 'raw';
+                             // ROBUST PDF DETECTION
+                             const isPdf = file.format?.includes('pdf') || file.url.toLowerCase().endsWith('.pdf') || (file.url.includes('/raw/') && !file.url.match(/\.(jpeg|jpg|png|gif)$/i));
                              const isImage = !isPdf && (file.format?.includes('image') || file.url.match(/\.(jpeg|jpg|png|gif)$/i));
 
                              return (
@@ -754,7 +752,6 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
                                             <span className="text-[10px] uppercase text-slate-400">PDF / DOC</span>
                                         </div>
                                     )}
-                                    
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
                                         <a href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white rounded-full hover:bg-yellow-400 transition shadow-lg" title="Open File">
                                             <ExternalLink size={20} className="text-slate-900" />
@@ -810,7 +807,7 @@ function TaskCard({ task, index, onClick }) {
   );
 }
 
-// --- CREATE TASK MODAL (Fixed Styling) ---
+// --- CREATE TASK MODAL (Fixed Dropdown Visibility) ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -841,7 +838,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
             
-            {/* REPORTER SELECT (Fixed Style) */}
+            {/* REPORTER SELECT (Fixed: bg-white for visibility) */}
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                <label className="block text-xs font-bold text-blue-600 uppercase mb-1">Reporter</label>
                <select 
@@ -863,7 +860,12 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
                 <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start</label><input type="date" className="w-full border border-slate-200 rounded-lg p-2.5 text-sm" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} /></div>
                 <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Deadline</label><input type="date" className="w-full border border-slate-200 rounded-lg p-2.5 text-sm" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} /></div>
             </div>
-            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label><select className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}><option value="">Unassigned</option>{users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}</select></div>
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
+                <select className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                    <option value="">Unassigned</option>{users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                </select>
+            </div>
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label><textarea className="w-full border border-slate-200 rounded-lg p-3 h-32 outline-none focus:ring-2 focus:ring-yellow-400 text-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Attachments</label>
@@ -877,7 +879,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
   );
 }
 
-// --- MODAL: CREATE TEAM (Fixed Member List) ---
+// --- MODAL: CREATE TEAM (Fixed List Size) ---
 function CreateTeamModal({ onClose, onSuccess }) {
   const [name, setName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -902,7 +904,8 @@ function CreateTeamModal({ onClose, onSuccess }) {
             {isPrivate && (
                 <div className="mt-4">
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label>
-                    <div className="h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
+                    {/* FIXED HEIGHT: h-64 */}
+                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
                         {users.length > 0 ? users.map(u => (
                             <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-200 rounded cursor-pointer transition">
                                 <input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900 w-4 h-4"/>
@@ -919,8 +922,8 @@ function CreateTeamModal({ onClose, onSuccess }) {
   );
 }
 
-// ... (Rest of components: TeamView, Sidebar, AuthScreen stay identical to previous efficient version) ...
-// Including them here for completeness if you are copy-pasting the whole file.
+// ... (Rest of components: TeamView, Sidebar, AuthScreen remain unchanged) ...
+// (Including them below for completeness)
 
 function TeamView() {
     const [users, setUsers] = useState([]);

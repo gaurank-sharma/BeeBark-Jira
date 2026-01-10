@@ -489,8 +489,6 @@
 // }
 
 
-
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -556,8 +554,6 @@ function BoardView({ currentUser, filter }) {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  
-  // Need users list for dropdowns in modals
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
@@ -616,12 +612,7 @@ function BoardView({ currentUser, filter }) {
                 {(provided, snapshot) => (
                   <div {...provided.droppableProps} ref={provided.innerRef} className={`flex-1 rounded-xl p-3 overflow-y-auto custom-scrollbar transition-colors border-2 ${snapshot.isDraggingOver ? 'bg-yellow-50/50 border-yellow-400/50' : 'bg-slate-100/50 border-transparent'}`}>
                     {tasks.filter(t => t.status === status).map((task, index) => (
-                      <TaskCard 
-                        key={task._id} 
-                        task={task} 
-                        index={index} 
-                        onClick={() => setSelectedTask(task)} 
-                      />
+                      <TaskCard key={task._id} task={task} index={index} onClick={() => setSelectedTask(task)} />
                     ))}
                     {provided.placeholder}
                   </div>
@@ -632,24 +623,14 @@ function BoardView({ currentUser, filter }) {
         </div>
       </DragDropContext>
 
-      {/* MODALS */}
       {isTaskModalOpen && <CreateTaskModal onClose={() => setIsTaskModalOpen(false)} onSuccess={fetchTasks} currentUser={currentUser} users={users} />}
       {isTeamModalOpen && <CreateTeamModal onClose={() => setIsTeamModalOpen(false)} onSuccess={() => alert("Pod Created!")} />}
-      
-      {/* TASK DETAIL & EDIT MODAL */}
-      {selectedTask && (
-          <TaskDetailModal 
-            task={selectedTask} 
-            users={users} 
-            onClose={() => setSelectedTask(null)} 
-            onUpdate={fetchTasks} 
-          />
-      )}
+      {selectedTask && <TaskDetailModal task={selectedTask} users={users} onClose={() => setSelectedTask(null)} onUpdate={fetchTasks} />}
     </div>
   );
 }
 
-// --- NEW COMPONENT: TASK DETAIL MODAL (With Edit & View Modes) ---
+// --- TASK DETAIL MODAL (Fixed File Loading) ---
 function TaskDetailModal({ task, onClose, onUpdate, users }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ ...task });
@@ -666,10 +647,8 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
         });
         onUpdate();
         setIsEditing(false);
-        onClose(); // Optional: Close modal after save
-    } catch (err) {
-        alert("Failed to update task");
-    }
+        onClose();
+    } catch (err) { alert("Failed to update task"); }
   };
 
   if (!task) return null;
@@ -677,8 +656,6 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
-        
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <div className="flex items-center gap-3 w-full">
              {isEditing ? (
@@ -692,67 +669,49 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
                  </>
              )}
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition text-slate-500 ml-4">
-            <X size={20} />
-          </button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition text-slate-500 ml-4"><X size={20} /></button>
         </div>
 
-        {/* Content - Scrollable */}
         <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
-            
-            {/* Description */}
             <div>
-               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <FileText size={14}/> Description
-               </h3>
+               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><FileText size={14}/> Description</h3>
                {isEditing ? (
                    <textarea className="w-full border p-2 rounded h-32" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
                ) : (
-                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                      {task.description || "No description provided."}
-                   </div>
+                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{task.description || "No description provided."}</div>
                )}
             </div>
 
-            {/* Meta Data Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Status</label>
                   <div className="font-bold text-slate-800 mt-1">{task.status}</div>
                </div>
                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Deadline</label>
-                  <div className={`font-bold mt-1 flex items-center gap-1 ${new Date(task.deadline) < new Date() ? 'text-red-600' : 'text-slate-800'}`}>
-                     <Clock size={14} className={new Date(task.deadline) < new Date() ? 'text-red-400' : 'text-slate-400'}/> 
-                     {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'None'}
-                  </div>
-               </div>
-               
-               {/* Editable Reporter */}
-               <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Reporter</label>
                   {isEditing ? (
-                      <select className="w-full border rounded mt-1 text-sm" value={editForm.reporter?._id || editForm.reporter} onChange={e => setEditForm({...editForm, reporter: e.target.value})}>
+                      <select className="w-full border bg-white rounded mt-1 text-sm p-1" value={editForm.reporter?._id || editForm.reporter} onChange={e => setEditForm({...editForm, reporter: e.target.value})}>
                           {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                       </select>
                   ) : (
-                      <div className="font-bold text-slate-800 mt-1 flex items-center gap-1">
-                         <UserIcon size={14} className="text-slate-400"/>
-                         {task.reporter?.username || 'Unknown'}
-                      </div>
+                      <div className="font-bold text-slate-800 mt-1 flex items-center gap-1"><UserIcon size={14} className="text-slate-400"/>{task.reporter?.username || 'Unknown'}</div>
                   )}
                </div>
-
-               {/* Editable Priority */}
-                <div>
+               <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase">Priority</label>
                   {isEditing ? (
-                      <select className="w-full border rounded mt-1 text-sm" value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value})}>
+                      <select className="w-full border bg-white rounded mt-1 text-sm p-1" value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value})}>
                           <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
                       </select>
                   ) : (
                       <div className="font-bold text-slate-800 mt-1">{task.priority}</div>
                   )}
+               </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Deadline</label>
+                  <div className={`font-bold mt-1 flex items-center gap-1 ${new Date(task.deadline) < new Date() ? 'text-red-600' : 'text-slate-800'}`}>
+                     <Clock size={14}/> {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'None'}
+                  </div>
                </div>
             </div>
 
@@ -760,133 +719,88 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
             <div>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Assigned To</h3>
                 {isEditing ? (
-                     <select className="w-full border rounded p-2" value={editForm.assignee?._id || editForm.assignee || ""} onChange={e => setEditForm({...editForm, assignee: e.target.value})}>
+                     <select className="w-full border bg-white rounded p-2" value={editForm.assignee?._id || editForm.assignee || ""} onChange={e => setEditForm({...editForm, assignee: e.target.value})}>
                         <option value="">Unassigned</option>
                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                      </select>
                 ) : (
                     task.assignee ? (
                         <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-sm w-fit">
-                            <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 text-lg">
-                            {task.assignee.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                            <div className="font-bold text-slate-900">{task.assignee.username}</div>
-                            <div className="text-xs text-slate-500">{task.assignee.email}</div>
-                            </div>
+                            <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 text-lg">{task.assignee.username[0].toUpperCase()}</div>
+                            <div><div className="font-bold text-slate-900">{task.assignee.username}</div><div className="text-xs text-slate-500">{task.assignee.email}</div></div>
                         </div>
-                    ) : (
-                        <div className="text-sm text-slate-400 italic">No one assigned yet.</div>
-                    )
+                    ) : <div className="text-sm text-slate-400 italic">No one assigned yet.</div>
                 )}
             </div>
 
-            {/* Attachments Section (VISUAL FIX) */}
+            {/* Attachments Section - Updated to handle PDFs correctly */}
             <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Paperclip size={14}/> Attachments ({task.attachments?.length || 0})
-                </h3>
-                
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Paperclip size={14}/> Attachments ({task.attachments?.length || 0})</h3>
                 {task.attachments && task.attachments.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         {task.attachments.map((file, idx) => {
-                             const isImage = file.format?.includes('image') || file.url.match(/\.(jpeg|jpg|png|gif)$/i);
-                             const isPdf = file.format?.includes('pdf') || file.url.match(/\.pdf$/i);
+                             // Check for PDF by extension OR format.
+                             const isPdf = file.format?.includes('pdf') || file.url.toLowerCase().endsWith('.pdf') || file.resource_type === 'raw';
+                             const isImage = !isPdf && (file.format?.includes('image') || file.url.match(/\.(jpeg|jpg|png|gif)$/i));
 
                              return (
-                                <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden group relative">
+                                <div key={idx} className="border border-slate-200 rounded-lg overflow-hidden group relative bg-slate-50">
                                     {isImage ? (
                                         <img src={file.url} alt={file.name} className="w-full h-32 object-cover" />
                                     ) : (
-                                        <div className="w-full h-32 bg-slate-100 flex flex-col items-center justify-center text-slate-500">
-                                            <FileText size={32} />
-                                            <span className="text-xs mt-2 font-bold uppercase">{isPdf ? 'PDF' : 'FILE'}</span>
+                                        <div className="w-full h-32 flex flex-col items-center justify-center text-slate-500 p-2 text-center">
+                                            <FileText size={32} className="text-red-500 mb-2" />
+                                            <span className="text-xs font-bold text-slate-700 truncate w-full">{file.name || 'Document'}</span>
+                                            <span className="text-[10px] uppercase text-slate-400">PDF / DOC</span>
                                         </div>
                                     )}
                                     
-                                    {/* Hover Actions */}
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white rounded-full hover:bg-yellow-400 transition" title="View/Download">
-                                            <ExternalLink size={16} />
+                                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white rounded-full hover:bg-yellow-400 transition shadow-lg" title="Open File">
+                                            <ExternalLink size={20} className="text-slate-900" />
                                         </a>
                                     </div>
-                                    <div className="p-2 text-xs font-bold truncate bg-white border-t">{file.name}</div>
                                 </div>
                              )
                         })}
                     </div>
-                ) : (
-                    <div className="p-4 border border-dashed border-slate-200 rounded-lg text-center text-sm text-slate-400">
-                        No attachments found.
-                    </div>
-                )}
+                ) : <div className="p-4 border border-dashed border-slate-200 rounded-lg text-center text-sm text-slate-400">No attachments found.</div>}
             </div>
 
-            {/* Edit Actions */}
             {isEditing && (
                 <div className="flex justify-end gap-2 pt-4 border-t">
                     <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 font-bold">Cancel</button>
-                    <button onClick={handleSave} className="px-4 py-2 bg-slate-900 text-white rounded font-bold flex items-center gap-2">
-                        <Save size={16}/> Save Changes
-                    </button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-slate-900 text-white rounded font-bold flex items-center gap-2"><Save size={16}/> Save Changes</button>
                 </div>
             )}
-
         </div>
       </div>
     </div>
   );
 }
 
-// --- COMPONENT: TASK CARD ---
+// --- TASK CARD ---
 function TaskCard({ task, index, onClick }) {
   return (
     <Draggable draggableId={task._id} index={index}>
       {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          onClick={onClick}
-          className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative cursor-pointer
-             ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}
-        >
+        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} onClick={onClick} className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative cursor-pointer ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}>
           <div className="flex flex-wrap gap-2 mb-3">
-            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[120px]">
-               {task.pod}
-            </span>
-            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${
-                task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : 
-                task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' :
-                'bg-blue-50 text-blue-600 border-blue-100'
-            }`}>
-               {task.priority}
-            </span>
+            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[120px]">{task.pod}</span>
+            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{task.priority}</span>
           </div>
-
           <h4 className="font-semibold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
-          
           <div className="flex justify-between items-center pt-3 border-t border-slate-50">
             <div className="flex items-center gap-2">
                 {task.assignee ? (
                     <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                         <div className="w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-[8px] font-bold text-slate-900">
-                            {task.assignee.username[0].toUpperCase()}
-                         </div>
+                         <div className="w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-[8px] font-bold text-slate-900">{task.assignee.username[0].toUpperCase()}</div>
                          <span className="text-[10px] font-bold text-slate-600 truncate max-w-[80px]">{task.assignee.username}</span>
                     </div>
-                ) : (
-                    <span className="text-[10px] text-slate-400 italic">Unassigned</span>
-                )}
+                ) : <span className="text-[10px] text-slate-400 italic">Unassigned</span>}
             </div>
-            
             <div className="flex items-center gap-2">
-                {task.deadline && (
-                    <div className={`flex items-center gap-1 text-[10px] font-medium ${new Date(task.deadline) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
-                        <Calendar size={12} />
-                        {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
-                    </div>
-                )}
+                {task.deadline && <div className={`flex items-center gap-1 text-[10px] font-medium ${new Date(task.deadline) < new Date() ? 'text-red-500' : 'text-slate-400'}`}><Calendar size={12} />{new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>}
                 {task.attachments?.length > 0 && <Paperclip size={12} className="text-slate-400" />}
             </div>
           </div>
@@ -896,18 +810,17 @@ function TaskCard({ task, index, onClick }) {
   );
 }
 
-// --- MODAL: CREATE TASK (Selectable Reporter) ---
+// --- CREATE TASK MODAL (Fixed Styling) ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', priority: 'Medium', pod: 'Development', assigneeId: '',
     startDate: new Date().toISOString().split('T')[0], deadline: '', files: [],
-    reporterId: currentUser._id // Default to self
+    reporterId: currentUser._id
   });
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault(); setLoading(true);
     const data = new FormData();
     Object.keys(formData).forEach(key => {
         if(key === 'files') { for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]); } 
@@ -928,10 +841,14 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
             
-            {/* REPORTER SELECT */}
+            {/* REPORTER SELECT (Fixed Style) */}
             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                <label className="block text-xs font-bold text-blue-600 uppercase mb-1">Reporter</label>
-               <select className="w-full bg-transparent border-none p-0 font-bold text-slate-700 outline-none" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
+               <select 
+                  className="w-full bg-white border border-blue-200 rounded p-2 text-slate-800 font-medium outline-none focus:ring-2 focus:ring-blue-400" 
+                  value={formData.reporterId} 
+                  onChange={e => setFormData({...formData, reporterId: e.target.value})}
+               >
                    {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                </select>
                <div className="text-xs text-blue-500 italic mt-1">Updates sent here.</div>
@@ -960,7 +877,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
   );
 }
 
-// --- MODAL: CREATE TEAM ---
+// --- MODAL: CREATE TEAM (Fixed Member List) ---
 function CreateTeamModal({ onClose, onSuccess }) {
   const [name, setName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -982,13 +899,28 @@ function CreateTeamModal({ onClose, onSuccess }) {
          <form onSubmit={handleSubmit} className="space-y-4">
             <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod Name</label><input className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-yellow-400 font-medium" placeholder="e.g. Secret Project X" value={name} onChange={e => setName(e.target.value)} required /></div>
             <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-yellow-400" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} /><div><span className="block text-sm font-bold text-slate-800 flex items-center gap-2"><Lock size={14} /> Secret Team?</span><span className="block text-xs text-slate-500">Only selected members see this.</span></div></label>
-            {isPrivate && <div className="mt-4"><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label><div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar">{users.map(u => <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer"><input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900"/><span className="text-sm font-medium text-slate-700">{u.username}</span></label>)}</div></div>}
+            {isPrivate && (
+                <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label>
+                    <div className="h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
+                        {users.length > 0 ? users.map(u => (
+                            <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-200 rounded cursor-pointer transition">
+                                <input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900 w-4 h-4"/>
+                                <span className="text-sm font-medium text-slate-700">{u.username}</span>
+                            </label>
+                        )) : <div className="text-center text-slate-400 text-sm mt-4">No other users found.</div>}
+                    </div>
+                </div>
+            )}
             <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Pod</button></div>
          </form>
       </div>
     </div>
   );
 }
+
+// ... (Rest of components: TeamView, Sidebar, AuthScreen stay identical to previous efficient version) ...
+// Including them here for completeness if you are copy-pasting the whole file.
 
 function TeamView() {
     const [users, setUsers] = useState([]);

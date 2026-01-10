@@ -682,12 +682,215 @@ function BoardView({ currentUser, filter }) {
 }
 
 // --- TASK DETAIL MODAL (Redesigned to Match Creation Modal) ---
+// function TaskDetailModal({ task, onClose, onUpdate, users }) {
+//   const [loading, setLoading] = useState(false);
+//   const [editForm, setEditForm] = useState({
+//      ...task,
+//      assigneeId: task.assignee?._id || task.assignee || "",
+//      reporterId: task.reporter?._id || task.reporter || "",
+//      startDate: task.startDate ? task.startDate.split('T')[0] : "",
+//      deadline: task.deadline ? task.deadline.split('T')[0] : ""
+//   });
+
+//   const handleSave = async () => {
+//     setLoading(true);
+//     try {
+//         await axios.put(`${API_URL}/tasks/${task._id}`, {
+//             title: editForm.title,
+//             description: editForm.description,
+//             priority: editForm.priority,
+//             pod: editForm.pod,
+//             status: editForm.status,
+//             assigneeId: editForm.assigneeId,
+//             startDate: editForm.startDate,
+//             deadline: editForm.deadline,
+//         });
+//         onUpdate();
+//         onClose();
+//     } catch (err) { alert("Failed to update task"); }
+//     finally { setLoading(false); }
+//   };
+
+//   if (!task) return null;
+
+//   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
+
+//   return (
+//     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+//       <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
+//         {/* HEADER */}
+//         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//                 Task Details 
+//                 {/* ID DISPLAY FIX */}
+//                 <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-sm font-medium border border-slate-200">
+//                     {task.taskId || 'NO-ID'}
+//                 </span>
+//             </h2>
+//             <div className="flex gap-4 items-center">
+//                 <button 
+//                     onClick={handleSave} 
+//                     disabled={loading}
+//                     className="bg-slate-900 text-white px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2"
+//                 >
+//                     {loading && <Loader2 className="animate-spin" size={14} />} Save Changes
+//                 </button>
+//                 <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+//             </div>
+//         </div>
+
+//         {/* BODY (Split Layout) */}
+//         <div className="flex flex-1 overflow-hidden">
+//             {/* LEFT: CONTENT */}
+//             <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
+//                  <input 
+//                     className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" 
+//                     placeholder="Issue Title" 
+//                     value={editForm.title} 
+//                     onChange={e => setEditForm({...editForm, title: e.target.value})} 
+//                  />
+
+//                  <div className="mb-6">
+//                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+//                         <FileText size={14} /> Description
+//                     </label>
+//                     <textarea 
+//                         className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-64 outline-none focus:ring-2 focus:ring-slate-200 text-slate-700 resize-none" 
+//                         value={editForm.description} 
+//                         onChange={e => setEditForm({...editForm, description: e.target.value})} 
+//                     />
+//                  </div>
+
+//                  <div>
+//                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+//                         <Paperclip size={14} /> Attachments ({task.attachments?.length || 0})
+//                     </label>
+//                     {task.attachments && task.attachments.length > 0 ? (
+//                         <div className="grid grid-cols-2 gap-4 mt-2">
+//                             {task.attachments.map((file, idx) => (
+//                                 <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+//                                     <div className="bg-red-50 p-2 rounded text-red-500"><FileText size={18}/></div>
+//                                     <div className="overflow-hidden">
+//                                         <div className="text-sm font-bold text-slate-700 truncate">{file.name}</div>
+//                                         <div className="text-xs text-slate-400 uppercase">{file.format?.split('/')[1] || 'FILE'}</div>
+//                                     </div>
+//                                 </a>
+//                             ))}
+//                         </div>
+//                     ) : <div className="text-sm text-slate-400 italic">No attachments.</div>}
+//                  </div>
+//             </div>
+
+//             {/* RIGHT: META DETAILS */}
+//             <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                
+//                 {/* STATUS */}
+//                 <div>
+//                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
+//                     <select 
+//                         className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none"
+//                         value={editForm.status} 
+//                         onChange={e => setEditForm({...editForm, status: e.target.value})}
+//                     >
+//                         <option>To Do</option>
+//                         <option>In Progress</option>
+//                         <option>Blocked</option>
+//                         <option>Done</option>
+//                     </select>
+//                 </div>
+
+//                 {/* PRIORITY */}
+//                 <div>
+//                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Priority</label>
+//                     <div className="flex gap-1">
+//                         {['Low', 'Medium', 'High', 'Critical'].map(p => (
+//                             <button 
+//                                 key={p}
+//                                 onClick={() => setEditForm({...editForm, priority: p})}
+//                                 className={`flex-1 py-1 text-[10px] uppercase font-bold border rounded transition
+//                                     ${editForm.priority === p 
+//                                         ? 'bg-slate-800 text-white border-slate-800' 
+//                                         : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+//                                     }`}
+//                             >
+//                                 {p}
+//                             </button>
+//                         ))}
+//                     </div>
+//                 </div>
+
+//                 {/* POD */}
+//                 <div>
+//                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod / Team</label>
+//                     <div className="relative">
+//                         <select 
+//                             className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+//                             value={editForm.pod} 
+//                             onChange={e => setEditForm({...editForm, pod: e.target.value})}
+//                         >
+//                             {PODS.map(p => <option key={p} value={p}>{p}</option>)}
+//                         </select>
+//                         <ChevronDown size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
+//                     </div>
+//                 </div>
+
+//                 {/* ASSIGNEE */}
+//                 <div>
+//                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
+//                     <div className="relative">
+//                         <select 
+//                             className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+//                             value={editForm.assigneeId} 
+//                             onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}
+//                         >
+//                             <option value="">Unassigned</option>
+//                             {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+//                         </select>
+//                         <UserIcon size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
+//                     </div>
+//                 </div>
+
+//                 {/* TIMELINE */}
+//                 <div>
+//                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Timeline</label>
+//                     <div className="bg-white border border-slate-200 rounded p-3">
+//                          <div className="mb-2">
+//                             <label className="text-[10px] text-slate-400 uppercase">Start Date</label>
+//                             <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} />
+//                          </div>
+//                          <div className="pt-2 border-t border-slate-100">
+//                             <label className="text-[10px] text-slate-400 uppercase">Due Date</label>
+//                             <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} />
+//                          </div>
+//                     </div>
+//                 </div>
+
+//                 {/* REPORTER INFO */}
+//                 <div className="pt-4 border-t border-slate-200">
+//                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reported By</label>
+//                     <div className="text-xs font-medium text-slate-600 flex items-center gap-2">
+//                         <div className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">R</div>
+//                         {task.reporter?.username || 'Unknown'}
+//                     </div>
+//                 </div>
+
+//             </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+
+// --- TASK DETAIL MODAL (Updated Design & Pickers) ---
 function TaskDetailModal({ task, onClose, onUpdate, users }) {
   const [loading, setLoading] = useState(false);
+  
+  // Initialize form with existing task data
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
-     reporterId: task.reporter?._id || task.reporter || "",
+     reporterId: task.reporter?._id || task.reporter || "", // Ensure reporter ID is captured
      startDate: task.startDate ? task.startDate.split('T')[0] : "",
      deadline: task.deadline ? task.deadline.split('T')[0] : ""
   });
@@ -702,6 +905,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
             pod: editForm.pod,
             status: editForm.status,
             assigneeId: editForm.assigneeId,
+            reporterId: editForm.reporterId, // Send updated reporter
             startDate: editForm.startDate,
             deadline: editForm.deadline,
         });
@@ -717,23 +921,29 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[85vh] flex flex-col">
+        
         {/* HEADER */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                Task Details 
-                {/* ID DISPLAY FIX */}
-                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-sm font-medium border border-slate-200">
+            <div className="flex items-center gap-3">
+                 {/* Task ID Display */}
+                <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider">
                     {task.taskId || 'NO-ID'}
                 </span>
-            </h2>
+                {/* Editable Title in Header */}
+                <input 
+                    className="font-bold text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent w-96 hover:bg-slate-50 rounded px-1 transition" 
+                    value={editForm.title} 
+                    onChange={e => setEditForm({...editForm, title: e.target.value})} 
+                />
+            </div>
             <div className="flex gap-4 items-center">
                 <button 
                     onClick={handleSave} 
                     disabled={loading}
-                    className="bg-slate-900 text-white px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2"
+                    className="bg-slate-900 text-white px-5 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2"
                 >
-                    {loading && <Loader2 className="animate-spin" size={14} />} Save Changes
+                    {loading && <Loader2 className="animate-spin" size={14} />} Save
                 </button>
                 <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
             </div>
@@ -741,96 +951,133 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
 
         {/* BODY (Split Layout) */}
         <div className="flex flex-1 overflow-hidden">
+            
             {/* LEFT: CONTENT */}
             <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                 <input 
-                    className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" 
-                    placeholder="Issue Title" 
-                    value={editForm.title} 
-                    onChange={e => setEditForm({...editForm, title: e.target.value})} 
-                 />
-
-                 <div className="mb-6">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+                 
+                 <div className="mb-8">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3">
                         <FileText size={14} /> Description
                     </label>
                     <textarea 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-64 outline-none focus:ring-2 focus:ring-slate-200 text-slate-700 resize-none" 
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-48 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed transition-all" 
+                        placeholder="Add a detailed description..."
                         value={editForm.description} 
                         onChange={e => setEditForm({...editForm, description: e.target.value})} 
                     />
                  </div>
 
+                 {/* META ROW (Status, Priority, Reporter) */}
+                 <div className="grid grid-cols-3 gap-6 mb-8 bg-slate-50 p-5 rounded-xl border border-slate-100">
+                    
+                    {/* Status Selector */}
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>
+                        <select 
+                            className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400"
+                            value={editForm.status} 
+                            onChange={e => setEditForm({...editForm, status: e.target.value})}
+                        >
+                            <option>To Do</option>
+                            <option>In Progress</option>
+                            <option>Blocked</option>
+                            <option>Done</option>
+                        </select>
+                    </div>
+
+                    {/* Reporter Selector (UPDATED) */}
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Reporter</label>
+                        <div className="relative">
+                            <select 
+                                className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none focus:ring-2 focus:ring-yellow-400 appearance-none"
+                                value={editForm.reporterId} 
+                                onChange={e => setEditForm({...editForm, reporterId: e.target.value})}
+                            >
+                                {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                            </select>
+                            <UserIcon size={14} className="absolute right-3 top-2.5 pointer-events-none text-slate-400"/>
+                        </div>
+                    </div>
+
+                    {/* Priority Selector */}
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Priority</label>
+                        <select 
+                             className={`w-full border rounded p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-400
+                                ${editForm.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-200' : 
+                                  editForm.priority === 'High' ? 'bg-orange-50 text-orange-600 border-orange-200' : 
+                                  'bg-white text-slate-700 border-slate-200'}`}
+                             value={editForm.priority}
+                             onChange={e => setEditForm({...editForm, priority: e.target.value})}
+                        >
+                            <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+                        </select>
+                    </div>
+                 </div>
+
+                 {/* Attachments */}
                  <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3">
                         <Paperclip size={14} /> Attachments ({task.attachments?.length || 0})
                     </label>
                     {task.attachments && task.attachments.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-4 mt-2">
+                        <div className="grid grid-cols-2 gap-4">
                             {task.attachments.map((file, idx) => (
-                                <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                                    <div className="bg-red-50 p-2 rounded text-red-500"><FileText size={18}/></div>
+                                <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
+                                    <div className="bg-red-50 p-2.5 rounded-lg text-red-500 group-hover:scale-110 transition"><FileText size={20}/></div>
                                     <div className="overflow-hidden">
                                         <div className="text-sm font-bold text-slate-700 truncate">{file.name}</div>
-                                        <div className="text-xs text-slate-400 uppercase">{file.format?.split('/')[1] || 'FILE'}</div>
+                                        <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{file.format?.split('/')[1] || 'FILE'}</div>
                                     </div>
+                                    <ExternalLink size={14} className="ml-auto text-slate-300 group-hover:text-slate-600"/>
                                 </a>
                             ))}
                         </div>
-                    ) : <div className="text-sm text-slate-400 italic">No attachments.</div>}
+                    ) : <div className="text-sm text-slate-400 italic p-4 border border-dashed border-slate-200 rounded-lg text-center">No attachments found.</div>}
                  </div>
             </div>
 
-            {/* RIGHT: META DETAILS */}
-            <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+            {/* RIGHT: SIDEBAR */}
+            <div className="w-80 bg-slate-50/80 p-6 overflow-y-auto custom-scrollbar space-y-6 border-l border-slate-100">
                 
-                {/* STATUS */}
+                {/* TIMELINE (New Design Matching Screenshot) */}
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
-                    <select 
-                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none"
-                        value={editForm.status} 
-                        onChange={e => setEditForm({...editForm, status: e.target.value})}
-                    >
-                        <option>To Do</option>
-                        <option>In Progress</option>
-                        <option>Blocked</option>
-                        <option>Done</option>
-                    </select>
-                </div>
-
-                {/* PRIORITY */}
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Priority</label>
-                    <div className="flex gap-1">
-                        {['Low', 'Medium', 'High', 'Critical'].map(p => (
-                            <button 
-                                key={p}
-                                onClick={() => setEditForm({...editForm, priority: p})}
-                                className={`flex-1 py-1 text-[10px] uppercase font-bold border rounded transition
-                                    ${editForm.priority === p 
-                                        ? 'bg-slate-800 text-white border-slate-800' 
-                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                                    }`}
-                            >
-                                {p}
-                            </button>
-                        ))}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline</label>
+                    <div className="bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                         <div className="p-2 border-b border-slate-100">
+                            <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Start Date</label>
+                            <input 
+                                type="date" 
+                                className="w-full text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer" 
+                                value={editForm.startDate} 
+                                onChange={e => setEditForm({...editForm, startDate: e.target.value})} 
+                            />
+                         </div>
+                         <div className="p-2">
+                            <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Due Date</label>
+                            <input 
+                                type="date" 
+                                className="w-full text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer" 
+                                value={editForm.deadline} 
+                                onChange={e => setEditForm({...editForm, deadline: e.target.value})} 
+                            />
+                         </div>
                     </div>
                 </div>
 
-                {/* POD */}
+                {/* POD / TEAM */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod / Team</label>
                     <div className="relative">
                         <select 
-                            className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium outline-none appearance-none hover:border-slate-300 transition"
                             value={editForm.pod} 
                             onChange={e => setEditForm({...editForm, pod: e.target.value})}
                         >
                             {PODS.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-                        <ChevronDown size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
+                        <ChevronDown size={14} className="absolute right-3 top-3.5 pointer-events-none text-slate-400"/>
                     </div>
                 </div>
 
@@ -839,38 +1086,14 @@ function TaskDetailModal({ task, onClose, onUpdate, users }) {
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
                     <div className="relative">
                         <select 
-                            className="w-full bg-white border border-slate-200 rounded p-2 text-sm font-medium outline-none appearance-none"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium outline-none appearance-none hover:border-slate-300 transition"
                             value={editForm.assigneeId} 
                             onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}
                         >
                             <option value="">Unassigned</option>
                             {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                         </select>
-                        <UserIcon size={14} className="absolute right-3 top-3 pointer-events-none text-slate-400"/>
-                    </div>
-                </div>
-
-                {/* TIMELINE */}
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Timeline</label>
-                    <div className="bg-white border border-slate-200 rounded p-3">
-                         <div className="mb-2">
-                            <label className="text-[10px] text-slate-400 uppercase">Start Date</label>
-                            <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} />
-                         </div>
-                         <div className="pt-2 border-t border-slate-100">
-                            <label className="text-[10px] text-slate-400 uppercase">Due Date</label>
-                            <input type="date" className="w-full text-sm font-medium outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} />
-                         </div>
-                    </div>
-                </div>
-
-                {/* REPORTER INFO */}
-                <div className="pt-4 border-t border-slate-200">
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reported By</label>
-                    <div className="text-xs font-medium text-slate-600 flex items-center gap-2">
-                        <div className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">R</div>
-                        {task.reporter?.username || 'Unknown'}
+                        <UserIcon size={14} className="absolute right-3 top-3.5 pointer-events-none text-slate-400"/>
                     </div>
                 </div>
 

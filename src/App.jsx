@@ -390,49 +390,41 @@
 // }
 
 
-
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Trash2, Plus, LogOut, User as UserIcon, Loader2, 
-  Paperclip, AlertCircle, CheckCircle2, Users 
+  Calendar, Paperclip, LayoutGrid, Users, CheckCircle2 
 } from 'lucide-react';
 import logo from './assets/logo.png'; 
 
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api';
 
-// --- AXIOS INTERCEPTOR (Fixes "Already Logged In" Bug) ---
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
+// Fix: Auto-logout on 401
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = "/"; // Force refresh to Auth Screen
+    if (error.response?.status === 401) {
+      localStorage.clear();
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }
 );
 
+// --- MAIN APP COMPONENT ---
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
+  const [activeTab, setActiveTab] = useState('board'); // 'board', 'my-tasks', 'team'
 
+  // Persist Auth
   useEffect(() => {
     if (token) {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
   }, [token, user]);
 
@@ -440,481 +432,433 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
-      <Sidebar user={user} setToken={setToken} />
-      <BoardArea user={user} />
-    </div>
-  );
-}
-
-// --- SIDEBAR ---
-function Sidebar({ user, setToken }) {
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10">
-      <div className="p-6 flex items-center gap-3">
-        {logo ? (
-          <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
-        ) : (
-          <div className="w-10 h-10 bg-brand-yellow rounded-lg flex items-center justify-center font-bold">B</div>
-        )}
-        <span className="text-xl font-bold tracking-tight text-brand-black">BeeBark Jira</span>
-      </div>
+      <Sidebar 
+        user={user} 
+        setToken={setToken} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+      />
       
-      <nav className="flex-1 px-4 space-y-2 mt-4">
-        <NavItem active>Kanban Board</NavItem>
-        <NavItem>My Tasks</NavItem>
-        <NavItem>Team Members</NavItem>
-      </nav>
-
-      <div className="p-4 border-t border-slate-100">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center font-bold text-brand-black shadow-sm">
-            {user?.username?.[0]?.toUpperCase() || 'U'}
-          </div>
-          <div className="overflow-hidden">
-            <div className="text-sm font-medium truncate">{user?.username}</div>
-            <div className="text-xs text-slate-400 truncate">{user?.email}</div>
-          </div>
-        </div>
-        <button 
-          onClick={() => setToken(null)}
-          className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-sm w-full transition-colors p-2 rounded-md hover:bg-red-50"
-        >
-          <LogOut size={16} /> Logout
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-function NavItem({ children, active }) {
-  return (
-    <div className={`p-2.5 rounded-lg text-sm font-medium cursor-pointer transition flex items-center gap-3 ${active ? 'bg-slate-100 text-brand-black' : 'text-slate-500 hover:bg-slate-50 hover:text-brand-black'}`}>
-      <span className={`w-2 h-2 rounded-full transition-all ${active ? 'bg-brand-yellow scale-110' : 'bg-transparent border border-slate-300'}`}></span>
-      {children}
+      <main className="flex-1 overflow-hidden relative">
+        {activeTab === 'board' && <BoardView currentUser={user} filter="all" />}
+        {activeTab === 'my-tasks' && <BoardView currentUser={user} filter="my-tasks" />}
+        {activeTab === 'team' && <TeamView />}
+      </main>
     </div>
   );
 }
 
-// --- MAIN BOARD AREA ---
-function BoardArea({ user }) {
+// --- 1. BOARD VIEW (Kanban) ---
+function BoardView({ currentUser, filter }) {
   const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [teams, setTeams] = useState([]);
-  
-  // State for Selection
-  const [selectedTeam, setSelectedTeam] = useState('');
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Initial Data Fetch
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchTasks = async () => {
+    const endpoint = filter === 'my-tasks' ? `${API_URL}/tasks?filter=my-tasks` : `${API_URL}/tasks`;
     try {
-      const [tasksRes, usersRes, teamsRes] = await Promise.all([
-        axios.get(`${API_URL}/tasks`),
-        axios.get(`${API_URL}/users`),
-        axios.get(`${API_URL}/teams`)
-      ]);
-      setTasks(tasksRes.data);
-      setUsers(usersRes.data);
-      setTeams(teamsRes.data);
-      
-      // Auto-select first team if available
-      if (teamsRes.data.length > 0 && !selectedTeam) {
-        setSelectedTeam(teamsRes.data[0]._id);
-      }
-    } catch (error) {
-      console.error("Failed to load board data", error);
-    }
+        const { data } = await axios.get(endpoint);
+        setTasks(data);
+    } catch (e) { console.error("Fetch error", e); }
   };
 
-  const handleTaskCreated = () => {
-    fetchData(); // Refresh everything
-    setIsTaskModalOpen(false);
-  };
-
-  const handleTeamCreated = () => {
-    fetchData();
-    setIsTeamModalOpen(false);
-  };
-
-  const deleteTask = async (id) => {
-    if(!window.confirm("Are you sure you want to delete this task?")) return;
-    const originalTasks = [...tasks];
-    setTasks(prev => prev.filter(t => t._id !== id)); 
-    try {
-      await axios.delete(`${API_URL}/tasks/${id}`);
-    } catch (err) {
-      setTasks(originalTasks);
-    }
-  };
+  useEffect(() => { fetchTasks(); }, [filter]);
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
-    const { source, destination, draggableId } = result;
-    if (source.droppableId !== destination.droppableId) {
-      const updatedTasks = tasks.map(t => 
+    const { draggableId, destination } = result;
+    
+    // Optimistic Update
+    const updated = tasks.map(t => 
         t._id === draggableId ? { ...t, status: destination.droppableId } : t
-      );
-      setTasks(updatedTasks);
-      try {
-        await axios.put(`${API_URL}/tasks/${draggableId}`, { status: destination.droppableId });
-      } catch (err) {
-        console.error("Failed to move task");
-      }
-    }
-  };
+    );
+    setTasks(updated);
 
-  // Filter Tasks by Team
-  const teamTasks = selectedTeam 
-    ? tasks.filter(t => t.team?._id === selectedTeam || t.team === selectedTeam)
-    : [];
+    await axios.put(`${API_URL}/tasks/${draggableId}`, { status: destination.droppableId });
+  };
 
   const columns = ['To Do', 'In Progress', 'Done'];
 
   return (
-    <main className="flex-1 overflow-x-auto p-8 h-full flex flex-col relative">
-      <header className="flex justify-between items-center mb-8">
+    <div className="h-full flex flex-col p-8 overflow-x-auto">
+      <header className="flex justify-between items-center mb-6">
         <div>
-           <h1 className="text-2xl font-bold text-brand-black">Project Board</h1>
-           <p className="text-slate-500 text-sm">Manage tasks for your pods</p>
+           <h1 className="text-2xl font-bold text-brand-black">
+             {filter === 'my-tasks' ? 'My Tasks' : 'Project Board'}
+           </h1>
+           <p className="text-slate-500">Managing tasks across all pods</p>
         </div>
-
-        <div className="flex items-center gap-4">
-          {/* Team Selector */}
-          <div className="flex items-center gap-2">
-             <select 
-               className="bg-white border border-slate-200 text-sm font-medium p-2 rounded-lg outline-none focus:ring-2 focus:ring-brand-yellow"
-               value={selectedTeam}
-               onChange={(e) => setSelectedTeam(e.target.value)}
-             >
-               <option value="" disabled>Select Team / Pod</option>
-               {teams.map(t => <option key={t._id} value={t._id}>{t.name} {t.isPrivate ? '(🔒)' : ''}</option>)}
-             </select>
-             <button 
-               onClick={() => setIsTeamModalOpen(true)}
-               className="p-2 bg-slate-200 rounded-lg hover:bg-slate-300 transition" 
-               title="Create New Team"
-             >
-               <Users size={18} />
-             </button>
-          </div>
-
-          <button 
-            onClick={() => setIsTaskModalOpen(true)}
-            disabled={!selectedTeam}
-            className="bg-brand-black text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus size={18} /> New Task
-          </button>
-        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="bg-brand-black text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg"
+        >
+          <Plus size={18} /> Create Task
+        </button>
       </header>
 
-      {/* --- KANBAN BOARD --- */}
-      {teams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-slate-400">
-           <Users size={48} className="mb-4 opacity-50"/>
-           <p>No teams found. Create a team (Pod) to get started.</p>
-           <button onClick={() => setIsTeamModalOpen(true)} className="mt-4 text-brand-black underline font-bold">Create Team</button>
-        </div>
-      ) : (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-6 h-[calc(100%-80px)] items-start">
-            {columns.map(status => {
-              const columnTasks = teamTasks.filter(t => t.status === status);
-              return (
-                <div key={status} className="w-80 flex-shrink-0 flex flex-col max-h-full">
-                  <div className="flex items-center justify-between mb-4 px-1">
-                    <h3 className="font-bold text-slate-700 uppercase text-xs tracking-wider flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${status === 'Done' ? 'bg-green-500' : status === 'In Progress' ? 'bg-blue-500' : 'bg-slate-400'}`}></span>
-                        {status}
-                    </h3>
-                    <span className="bg-white border border-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold shadow-sm">
-                      {columnTasks.length}
-                    </span>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex gap-6 h-full pb-4">
+          {columns.map(status => (
+            <div key={status} className="w-80 flex-shrink-0 flex flex-col h-full">
+              <div className="flex justify-between items-center mb-3 px-1">
+                <h3 className="font-bold text-slate-700 uppercase text-xs tracking-wider">{status}</h3>
+                <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold border">{tasks.filter(t => t.status === status).length}</span>
+              </div>
+              
+              <Droppable droppableId={status}>
+                {(provided, snapshot) => (
+                  <div 
+                    {...provided.droppableProps} 
+                    ref={provided.innerRef}
+                    className={`flex-1 rounded-xl p-3 overflow-y-auto custom-scrollbar transition-colors ${snapshot.isDraggingOver ? 'bg-yellow-50 border-2 border-dashed border-yellow-400' : 'bg-slate-100 border-2 border-transparent'}`}
+                  >
+                    {tasks.filter(t => t.status === status).map((task, index) => (
+                      <TaskCard key={task._id} task={task} index={index} />
+                    ))}
+                    {provided.placeholder}
                   </div>
-                  
-                  <Droppable droppableId={status}>
-                    {(provided, snapshot) => (
-                      <div 
-                        {...provided.droppableProps} 
-                        ref={provided.innerRef}
-                        className={`rounded-xl p-3 min-h-[150px] transition-colors duration-200 flex-1 overflow-y-auto custom-scrollbar 
-                            ${snapshot.isDraggingOver ? 'bg-brand-yellow/10 border-brand-yellow/30' : 'bg-slate-100/80 border-transparent'} border-2`}
-                      >
-                        {columnTasks.map((task, index) => (
-                          <Draggable key={task._id} draggableId={task._id} index={index}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`bg-white p-4 rounded-lg border mb-3 group transition-all relative
-                                    ${snapshot.isDragging ? 'shadow-lg rotate-2 border-brand-yellow' : 'shadow-sm border-slate-200 hover:border-brand-yellow/60 hover:shadow-md'}
-                                `}
-                              >
-                                {/* Priority Tag */}
-                                <div className="flex justify-between items-start mb-2">
-                                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase
-                                     ${task.priority === 'High' ? 'bg-red-100 text-red-600' : 
-                                       task.priority === 'Low' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                                     {task.priority || 'Medium'}
-                                   </span>
-                                   {task.attachments?.length > 0 && (
-                                     <span className="text-slate-400 flex items-center text-xs gap-0.5">
-                                       <Paperclip size={12}/> {task.attachments.length}
-                                     </span>
-                                   )}
-                                </div>
+                )}
+              </Droppable>
+            </div>
+          ))}
+        </div>
+      </DragDropContext>
 
-                                <p className="font-medium text-slate-800 text-sm mb-3 leading-snug">{task.title}</p>
-                                
-                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-50">
-                                  {task.assignee ? (
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-full">
-                                      <UserIcon size={10} />
-                                      {task.assignee.username}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-400 italic">Unassigned</span>
-                                  )}
-                                  
-                                  <button 
-                                    onClick={() => deleteTask(task._id)}
-                                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition p-1"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
-              );
-            })}
-          </div>
-        </DragDropContext>
-      )}
-
-      {/* --- MODALS --- */}
-      {isTaskModalOpen && (
-        <CreateTaskModal 
-          users={users} 
-          teams={teams}
-          selectedTeamId={selectedTeam}
-          onClose={() => setIsTaskModalOpen(false)}
-          onSuccess={handleTaskCreated}
-        />
-      )}
-
-      {isTeamModalOpen && (
-        <CreateTeamModal 
-          onClose={() => setIsTeamModalOpen(false)}
-          onSuccess={handleTeamCreated}
-        />
-      )}
-
-    </main>
+      {isModalOpen && <CreateTaskModal onClose={() => setIsModalOpen(false)} onSuccess={fetchTasks} />}
+    </div>
   );
 }
 
-// --- CREATE TASK MODAL (With File Upload) ---
-function CreateTaskModal({ users, teams, selectedTeamId, onClose, onSuccess }) {
+// --- 2. TASK CARD COMPONENT ---
+function TaskCard({ task, index }) {
+  return (
+    <Draggable draggableId={task._id} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-brand-yellow' : ''}`}
+        >
+          {/* Tags */}
+          <div className="flex gap-2 mb-2">
+            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+               {task.pod}
+            </span>
+            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                task.priority === 'High' ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'
+            }`}>
+               {task.priority}
+            </span>
+          </div>
+
+          <h4 className="font-semibold text-slate-800 text-sm mb-1 leading-tight">{task.title}</h4>
+          
+          <div className="flex justify-between items-end mt-3 border-t pt-2 border-slate-50">
+            <div className="flex items-center gap-2">
+                {task.assignee ? (
+                    <div className="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center text-[10px] font-bold" title={task.assignee.username}>
+                        {task.assignee.username[0].toUpperCase()}
+                    </div>
+                ) : (
+                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-400">?</div>
+                )}
+                {task.deadline && (
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Calendar size={10} /> {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                    </span>
+                )}
+            </div>
+            {task.attachments?.length > 0 && <Paperclip size={12} className="text-slate-400" />}
+          </div>
+        </div>
+      )}
+    </Draggable>
+  );
+}
+
+// --- 3. CREATE TASK MODAL (THE COMPLETED INTERFACE) ---
+function CreateTaskModal({ onClose, onSuccess }) {
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
+  const [formData, setFormData] = useState({
     title: '',
     description: '',
     priority: 'Medium',
-    teamId: selectedTeamId || teams[0]?._id,
+    pod: 'Development', // Default Pod
     assigneeId: '',
+    startDate: new Date().toISOString().split('T')[0],
+    deadline: '',
     files: []
   });
+
+  // Fetch users for the dropdown
+  useEffect(() => {
+    axios.get(`${API_URL}/users`).then(res => setUsers(res.data));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    const formData = new FormData();
-    formData.append('title', form.title);
-    formData.append('description', form.description);
-    formData.append('priority', form.priority);
-    formData.append('teamId', form.teamId);
-    if(form.assigneeId) formData.append('assigneeId', form.assigneeId);
-    
-    // Append Files
-    if (form.files) {
-      for (let i = 0; i < form.files.length; i++) {
-        formData.append('files', form.files[i]);
-      }
-    }
+    const data = new FormData();
+    Object.keys(formData).forEach(key => {
+        if(key === 'files') {
+            for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]);
+        } else {
+            data.append(key, formData[key]);
+        }
+    });
 
     try {
-      await axios.post(`${API_URL}/tasks`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      onSuccess();
-    } catch (err) {
-      alert("Failed to create task. Check console.");
-      console.error(err);
+        await axios.post(`${API_URL}/tasks`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        onSuccess();
+        onClose();
+    } catch(err) {
+        alert("Failed to create task");
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
+  const PODS = [
+    "Development", "Design Pod", "Marketing Pod", 
+    "Social Media & Community", "Sales / Partnerships", "Operations & Support"
+  ];
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <h2 className="text-lg font-bold text-brand-black">Create New Task</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h2 className="text-lg font-bold text-slate-800">Create New Task</h2>
+            <button onClick={onClose} className="text-slate-400 hover:text-red-500 text-2xl leading-none">&times;</button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Title</label>
-            <input 
-              className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-yellow outline-none text-sm"
-              placeholder="e.g. Fix Homepage Banner"
-              value={form.title}
-              onChange={e => setForm({...form, title: e.target.value})}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+            {/* Title */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod / Team</label>
-              <select 
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm bg-white"
-                value={form.teamId}
-                onChange={e => setForm({...form, teamId: e.target.value})}
-              >
-                {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-              </select>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Task Title</label>
+                <input 
+                    className="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-brand-yellow outline-none font-medium"
+                    placeholder="e.g., Redesign Homepage Hero Section"
+                    value={formData.title}
+                    onChange={e => setFormData({...formData, title: e.target.value})}
+                    required
+                />
             </div>
+
+            {/* Pod & Priority Row */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Pod</label>
+                    <select 
+                        className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                        value={formData.pod}
+                        onChange={e => setFormData({...formData, pod: e.target.value})}
+                    >
+                        {PODS.map(pod => <option key={pod} value={pod}>{pod}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Priority</label>
+                    <select 
+                        className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                        value={formData.priority}
+                        onChange={e => setFormData({...formData, priority: e.target.value})}
+                    >
+                        <option>Low</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                        <option>Critical</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Dates Row */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
+                    <input type="date" className="w-full border border-slate-300 rounded-lg p-2.5"
+                        value={formData.startDate}
+                        onChange={e => setFormData({...formData, startDate: e.target.value})}
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Deadline</label>
+                    <input type="date" className="w-full border border-slate-300 rounded-lg p-2.5"
+                        value={formData.deadline}
+                        onChange={e => setFormData({...formData, deadline: e.target.value})}
+                    />
+                </div>
+            </div>
+
+            {/* Assignee */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Priority</label>
-              <select 
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm bg-white"
-                value={form.priority}
-                onChange={e => setForm({...form, priority: e.target.value})}
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
+                <select 
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                    value={formData.assigneeId}
+                    onChange={e => setFormData({...formData, assigneeId: e.target.value})}
+                >
+                    <option value="">Unassigned</option>
+                    {users.map(u => <option key={u._id} value={u._id}>{u.username} ({u.email})</option>)}
+                </select>
             </div>
-          </div>
 
-          <div>
-             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
-             <select 
-                className="w-full border border-slate-200 rounded-lg p-2.5 text-sm bg-white"
-                value={form.assigneeId}
-                onChange={e => setForm({...form, assigneeId: e.target.value})}
-              >
-                <option value="">Unassigned</option>
-                {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-              </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
-            <textarea 
-              className="w-full border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-brand-yellow outline-none text-sm h-24 resize-none"
-              placeholder="Add details..."
-              value={form.description}
-              onChange={e => setForm({...form, description: e.target.value})}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Attachments</label>
-            <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:bg-slate-50 hover:border-brand-yellow/50 transition relative">
-               <input 
-                  type="file" 
-                  multiple 
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={e => setForm({...form, files: e.target.files})}
-               />
-               <Paperclip className="mx-auto text-slate-400 mb-2" size={20} />
-               <span className="text-xs text-slate-500">
-                  {form.files.length > 0 ? `${form.files.length} files selected` : "Drag files or click to upload"}
-               </span>
+            {/* Description */}
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
+                <textarea 
+                    className="w-full border border-slate-300 rounded-lg p-3 h-32 focus:ring-2 focus:ring-brand-yellow outline-none resize-none"
+                    placeholder="Describe the requirements..."
+                    value={formData.description}
+                    onChange={e => setFormData({...formData, description: e.target.value})}
+                />
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 pt-4">
-             <button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg text-sm font-medium">Cancel</button>
-             <button 
-               type="submit" 
-               disabled={loading}
-               className="px-6 py-2 bg-brand-black text-white rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
-             >
-               {loading && <Loader2 className="animate-spin" size={14} />}
-               Create Task
-             </button>
-          </div>
+            {/* File Upload */}
+            <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Attachments</label>
+                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 transition relative">
+                    <Paperclip size={24} className="mb-2" />
+                    <span className="text-sm">Click to upload files (Images, PDF, Excel)</span>
+                    <input 
+                        type="file" multiple 
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={e => setFormData({...formData, files: e.target.files})}
+                    />
+                </div>
+                {formData.files.length > 0 && (
+                    <div className="mt-2 text-xs text-brand-black font-bold">
+                        {formData.files.length} files selected
+                    </div>
+                )}
+            </div>
+            
+            <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-slate-600 font-bold hover:bg-slate-100">Cancel</button>
+                <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="px-6 py-2.5 rounded-lg bg-brand-black text-white font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
+                >
+                    {loading && <Loader2 className="animate-spin" size={16} />}
+                    Create Task
+                </button>
+            </div>
         </form>
       </div>
     </div>
   );
 }
 
-// --- CREATE TEAM MODAL ---
-function CreateTeamModal({ onClose, onSuccess }) {
-  const [name, setName] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [loading, setLoading] = useState(false);
+// --- 4. TEAM MEMBERS VIEW ---
+function TeamView() {
+    const [users, setUsers] = useState([]);
+    
+    useEffect(() => {
+        axios.get(`${API_URL}/users`).then(res => setUsers(res.data));
+    }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await axios.post(`${API_URL}/teams`, { name, isPrivate, members: [] }); // Add members logic later if needed
-      onSuccess();
-    } catch(err) {
-      alert("Failed to create team.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6">
-         <h2 className="text-lg font-bold text-brand-black mb-4">Create New Team (Pod)</h2>
-         <form onSubmit={handleSubmit} className="space-y-4">
-            <input 
-              className="w-full border border-slate-200 rounded-lg p-2.5 text-sm" 
-              placeholder="Team Name (e.g. Design)" 
-              value={name} onChange={e => setName(e.target.value)} required 
-            />
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} />
-              Private Team (Members Only)
-            </label>
-            <div className="flex justify-end gap-2 mt-4">
-               <button type="button" onClick={onClose} className="px-3 py-2 text-slate-500 text-sm">Cancel</button>
-               <button type="submit" disabled={loading} className="px-4 py-2 bg-brand-yellow rounded-lg text-sm font-bold">
-                 {loading ? 'Creating...' : 'Create Team'}
-               </button>
+    return (
+        <div className="p-8">
+            <h1 className="text-2xl font-bold text-brand-black mb-6">Team Members</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {users.map(u => (
+                    <div key={u._id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-brand-yellow flex items-center justify-center text-xl font-bold text-brand-black">
+                            {u.username[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-slate-800">{u.username}</h3>
+                            <p className="text-sm text-slate-500">{u.email}</p>
+                            <span className="inline-block mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Active Member</span>
+                        </div>
+                    </div>
+                ))}
             </div>
-         </form>
+            
+            {/* Simple Invite Mockup */}
+            <div className="mt-8 p-6 bg-slate-100 rounded-xl border border-dashed border-slate-300 text-center">
+                <h3 className="font-bold text-slate-700">Invite New Members</h3>
+                <p className="text-sm text-slate-500 mb-4">Send an invite link to add them to the team.</p>
+                <div className="flex justify-center gap-2 max-w-md mx-auto">
+                    <input type="email" placeholder="colleague@company.com" className="flex-1 p-2 border rounded-lg" />
+                    <button className="bg-brand-black text-white px-4 py-2 rounded-lg font-bold">Invite</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- SIDEBAR ---
+function Sidebar({ user, setToken, activeTab, setActiveTab }) {
+  return (
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
+      <div className="p-6 flex items-center gap-3 border-b border-slate-100">
+        {logo ? <img src={logo} alt="Logo" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 bg-brand-yellow rounded"></div>}
+        <span className="text-lg font-black tracking-tighter text-brand-black">BeeBark</span>
       </div>
-    </div>
+      
+      <nav className="flex-1 px-3 py-6 space-y-1">
+        <SidebarItem 
+            active={activeTab === 'board'} 
+            onClick={() => setActiveTab('board')} 
+            icon={<LayoutGrid size={18}/>}
+        >
+            Kanban Board
+        </SidebarItem>
+        <SidebarItem 
+            active={activeTab === 'my-tasks'} 
+            onClick={() => setActiveTab('my-tasks')} 
+            icon={<CheckCircle2 size={18}/>}
+        >
+            My Tasks
+        </SidebarItem>
+        <SidebarItem 
+            active={activeTab === 'team'} 
+            onClick={() => setActiveTab('team')} 
+            icon={<Users size={18}/>}
+        >
+            Team Members
+        </SidebarItem>
+      </nav>
+
+      <div className="p-4 border-t border-slate-100 bg-slate-50">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center font-bold text-brand-black shadow-sm">
+            {user?.username?.[0]?.toUpperCase()}
+          </div>
+          <div className="overflow-hidden">
+            <div className="text-sm font-bold truncate text-brand-black">{user?.username}</div>
+            <div className="text-xs text-slate-500 truncate">{user?.email}</div>
+          </div>
+        </div>
+        <button 
+          onClick={() => setToken(null)}
+          className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-xs font-bold w-full transition-colors p-2 rounded hover:bg-red-50"
+        >
+          <LogOut size={14} /> Sign Out
+        </button>
+      </div>
+    </aside>
   );
 }
 
-// --- AUTH SCREEN (Login/Register) ---
+function SidebarItem({ children, active, onClick, icon }) {
+    return (
+        <button 
+            onClick={onClick}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
+                ${active ? 'bg-brand-yellow/10 text-brand-black shadow-sm border border-brand-yellow/20' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+            `}
+        >
+            {icon}
+            {children}
+        </button>
+    );
+}
+
+// --- AUTH SCREEN (Fixed CSS for Buttons) ---
 function AuthScreen({ setToken, setUser }) {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
@@ -923,19 +867,19 @@ function AuthScreen({ setToken, setUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
-    const endpoint = isLogin ? '/login' : '/register';
+    setError('');
     
     try {
+      const endpoint = isLogin ? '/login' : '/register';
       const { data } = await axios.post(`${API_URL}${endpoint}`, formData);
+      
       if (isLogin) {
         setToken(data.token);
         setUser(data.user);
       } else {
         setIsLogin(true);
         setError("Account created! Please log in.");
-        setFormData({ username: '', email: '', password: '' });
       }
     } catch (err) {
       setError(err.response?.data?.error || "Connection failed.");
@@ -946,70 +890,64 @@ function AuthScreen({ setToken, setUser }) {
 
   return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl border border-slate-100">
+      <div className="w-full max-w-md p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-brand-yellow rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg transform rotate-3">
-             <span className="text-3xl font-black text-brand-black">B</span>
-          </div>
-          <h2 className="text-3xl font-bold text-brand-black">{isLogin ? 'Welcome Back' : 'Join BeeBark'}</h2>
-          <p className="text-slate-500 mt-2">Agile project management for teams.</p>
+           <h1 className="text-4xl font-black text-brand-black mb-2">BeeBark</h1>
+           <p className="text-slate-500">Agile project management for high-performance pods.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-500 mb-1 ml-1">Username</label>
-            <input 
-              type="text" 
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-yellow outline-none"
-              value={formData.username} 
-              onChange={e => setFormData({...formData, username: e.target.value})}
-              required
-            />
-          </div>
-          
-          {/* Email Field (Required for Notifications) */}
-          {!isLogin && (
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-500 mb-1 ml-1">Email Address</label>
+           <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label>
               <input 
-                type="email" 
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-yellow outline-none"
-                value={formData.email} 
-                onChange={e => setFormData({...formData, email: e.target.value})}
+                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                value={formData.username}
+                onChange={e => setFormData({...formData, username: e.target.value})}
                 required
               />
-            </div>
-          )}
+           </div>
+           
+           {!isLogin && (
+             <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label>
+                <input 
+                  type="email"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                  required
+                />
+             </div>
+           )}
 
-          <div>
-            <label className="block text-xs font-bold uppercase text-slate-500 mb-1 ml-1">Password</label>
-            <input 
-              type="password" 
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-yellow outline-none"
-              value={formData.password} 
-              onChange={e => setFormData({...formData, password: e.target.value})}
-              required
-            />
-          </div>
-          
-          {error && <div className={`text-sm text-center p-2 rounded flex items-center justify-center gap-2 ${error.includes('created') ? 'text-green-600 bg-green-50' : 'text-red-500 bg-red-50'}`}>
-            {error.includes('created') ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>} {error}
-          </div>}
+           <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
+              <input 
+                type="password"
+                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                value={formData.password}
+                onChange={e => setFormData({...formData, password: e.target.value})}
+                required
+              />
+           </div>
 
-          <button disabled={loading} type="submit" className="w-full bg-brand-black text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition flex justify-center items-center gap-2">
-            {loading && <Loader2 className="animate-spin" size={18} />}
-            {isLogin ? 'Log In' : 'Create Account'}
-          </button>
+           {error && <div className="text-center text-sm text-red-500 bg-red-50 p-2 rounded-lg">{error}</div>}
+
+           {/* FIXED BUTTON CSS: explicitly set bg-brand-black text-white */}
+           <button 
+             type="submit" 
+             disabled={loading}
+             className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2"
+           >
+             {loading && <Loader2 className="animate-spin" />}
+             {isLogin ? 'Log In' : 'Join Team'}
+           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-slate-500">
-          {isLogin ? "New to BeeBark?" : "Already have an account?"} 
-          <button 
-            className="ml-2 text-brand-black font-bold hover:underline"
-            onClick={() => setIsLogin(!isLogin)}
-          >
-            {isLogin ? 'Sign Up' : 'Log In'}
-          </button>
+        
+        <div className="text-center mt-6">
+            <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-brand-black transition">
+                {isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}
+            </button>
         </div>
       </div>
     </div>

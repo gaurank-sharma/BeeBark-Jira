@@ -395,19 +395,34 @@ import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Trash2, Plus, LogOut, User as UserIcon, Loader2, 
-  Calendar, Paperclip, LayoutGrid, Users, CheckCircle2 
+  Calendar, Paperclip, LayoutGrid, Users, CheckCircle2, 
+  Briefcase 
 } from 'lucide-react';
 import logo from './assets/logo.png'; 
 
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api';
 
-// Fix: Auto-logout on 401
+// --- 1. AXIOS INTERCEPTORS (CRITICAL FIXES) ---
+
+// REQUEST INTERCEPTOR: Attaches token to EVERY request
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+// RESPONSE INTERCEPTOR: Handles 401 (Unauthorized) by logging out
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.warn("Session expired. Logging out...");
       localStorage.clear();
-      window.location.href = "/";
+      window.location.href = "/"; // Force hard refresh to clear state
     }
     return Promise.reject(error);
   }
@@ -419,12 +434,14 @@ export default function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
   const [activeTab, setActiveTab] = useState('board'); // 'board', 'my-tasks', 'team'
 
-  // Persist Auth
+  // Persist Auth State
   useEffect(() => {
     if (token) {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
   }, [token, user]);
 
@@ -448,7 +465,7 @@ export default function App() {
   );
 }
 
-// --- 1. BOARD VIEW (Kanban) ---
+// --- VIEW: KANBAN BOARD ---
 function BoardView({ currentUser, filter }) {
   const [tasks, setTasks] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -482,14 +499,16 @@ function BoardView({ currentUser, filter }) {
     <div className="h-full flex flex-col p-8 overflow-x-auto">
       <header className="flex justify-between items-center mb-6">
         <div>
-           <h1 className="text-2xl font-bold text-brand-black">
+           <h1 className="text-2xl font-bold text-slate-900">
              {filter === 'my-tasks' ? 'My Tasks' : 'Project Board'}
            </h1>
-           <p className="text-slate-500">Managing tasks across all pods</p>
+           <p className="text-slate-500 text-sm">
+             {filter === 'my-tasks' ? 'Tasks assigned specifically to you' : 'Overview of all active pods'}
+           </p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="bg-brand-black text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg"
+          className="bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg"
         >
           <Plus size={18} /> Create Task
         </button>
@@ -500,8 +519,13 @@ function BoardView({ currentUser, filter }) {
           {columns.map(status => (
             <div key={status} className="w-80 flex-shrink-0 flex flex-col h-full">
               <div className="flex justify-between items-center mb-3 px-1">
-                <h3 className="font-bold text-slate-700 uppercase text-xs tracking-wider">{status}</h3>
-                <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold border">{tasks.filter(t => t.status === status).length}</span>
+                <h3 className="font-bold text-slate-700 uppercase text-xs tracking-wider flex items-center gap-2">
+                   <div className={`w-2 h-2 rounded-full ${status === 'Done' ? 'bg-green-500' : status === 'In Progress' ? 'bg-blue-500' : 'bg-slate-400'}`}></div>
+                   {status}
+                </h3>
+                <span className="bg-white px-2 py-0.5 rounded-full text-xs font-bold border border-slate-200 text-slate-500">
+                    {tasks.filter(t => t.status === status).length}
+                </span>
               </div>
               
               <Droppable droppableId={status}>
@@ -509,7 +533,8 @@ function BoardView({ currentUser, filter }) {
                   <div 
                     {...provided.droppableProps} 
                     ref={provided.innerRef}
-                    className={`flex-1 rounded-xl p-3 overflow-y-auto custom-scrollbar transition-colors ${snapshot.isDraggingOver ? 'bg-yellow-50 border-2 border-dashed border-yellow-400' : 'bg-slate-100 border-2 border-transparent'}`}
+                    className={`flex-1 rounded-xl p-3 overflow-y-auto custom-scrollbar transition-colors border-2 
+                        ${snapshot.isDraggingOver ? 'bg-yellow-50/50 border-yellow-400/50' : 'bg-slate-100/50 border-transparent'}`}
                   >
                     {tasks.filter(t => t.status === status).map((task, index) => (
                       <TaskCard key={task._id} task={task} index={index} />
@@ -528,7 +553,7 @@ function BoardView({ currentUser, filter }) {
   );
 }
 
-// --- 2. TASK CARD COMPONENT ---
+// --- COMPONENT: TASK CARD ---
 function TaskCard({ task, index }) {
   return (
     <Draggable draggableId={task._id} index={index}>
@@ -537,38 +562,48 @@ function TaskCard({ task, index }) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-brand-yellow' : ''}`}
+          className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative
+             ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}
         >
-          {/* Tags */}
-          <div className="flex gap-2 mb-2">
-            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+          {/* Header Tags */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[120px]">
                {task.pod}
             </span>
-            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                task.priority === 'High' ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'
+            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${
+                task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : 
+                task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' :
+                'bg-blue-50 text-blue-600 border-blue-100'
             }`}>
                {task.priority}
             </span>
           </div>
 
-          <h4 className="font-semibold text-slate-800 text-sm mb-1 leading-tight">{task.title}</h4>
+          <h4 className="font-semibold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
           
-          <div className="flex justify-between items-end mt-3 border-t pt-2 border-slate-50">
+          <div className="flex justify-between items-center pt-3 border-t border-slate-50">
             <div className="flex items-center gap-2">
                 {task.assignee ? (
-                    <div className="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center text-[10px] font-bold" title={task.assignee.username}>
-                        {task.assignee.username[0].toUpperCase()}
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                         <div className="w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-[8px] font-bold text-slate-900">
+                            {task.assignee.username[0].toUpperCase()}
+                         </div>
+                         <span className="text-[10px] font-bold text-slate-600 truncate max-w-[80px]">{task.assignee.username}</span>
                     </div>
                 ) : (
-                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-400">?</div>
-                )}
-                {task.deadline && (
-                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <Calendar size={10} /> {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
-                    </span>
+                    <span className="text-[10px] text-slate-400 italic">Unassigned</span>
                 )}
             </div>
-            {task.attachments?.length > 0 && <Paperclip size={12} className="text-slate-400" />}
+            
+            <div className="flex items-center gap-2">
+                {task.deadline && (
+                    <div className={`flex items-center gap-1 text-[10px] font-medium ${new Date(task.deadline) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
+                        <Calendar size={12} />
+                        {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                    </div>
+                )}
+                {task.attachments?.length > 0 && <Paperclip size={12} className="text-slate-400" />}
+            </div>
           </div>
         </div>
       )}
@@ -576,7 +611,7 @@ function TaskCard({ task, index }) {
   );
 }
 
-// --- 3. CREATE TASK MODAL (THE COMPLETED INTERFACE) ---
+// --- MODAL: CREATE TASK ---
 function CreateTaskModal({ onClose, onSuccess }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -584,16 +619,15 @@ function CreateTaskModal({ onClose, onSuccess }) {
     title: '',
     description: '',
     priority: 'Medium',
-    pod: 'Development', // Default Pod
+    pod: 'Development', 
     assigneeId: '',
     startDate: new Date().toISOString().split('T')[0],
     deadline: '',
     files: []
   });
 
-  // Fetch users for the dropdown
   useEffect(() => {
-    axios.get(`${API_URL}/users`).then(res => setUsers(res.data));
+    axios.get(`${API_URL}/users`).then(res => setUsers(res.data)).catch(err => console.error(err));
   }, []);
 
   const handleSubmit = async (e) => {
@@ -614,7 +648,7 @@ function CreateTaskModal({ onClose, onSuccess }) {
         onSuccess();
         onClose();
     } catch(err) {
-        alert("Failed to create task");
+        alert("Failed to create task. Check console.");
     } finally {
         setLoading(false);
     }
@@ -626,19 +660,19 @@ function CreateTaskModal({ onClose, onSuccess }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <h2 className="text-lg font-bold text-slate-800">Create New Task</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+            <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition">✕</button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
             {/* Title */}
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Task Title</label>
                 <input 
-                    className="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-brand-yellow outline-none font-medium"
+                    className="w-full border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-yellow-400 outline-none font-medium text-slate-800"
                     placeholder="e.g., Redesign Homepage Hero Section"
                     value={formData.title}
                     onChange={e => setFormData({...formData, title: e.target.value})}
@@ -646,12 +680,12 @@ function CreateTaskModal({ onClose, onSuccess }) {
                 />
             </div>
 
-            {/* Pod & Priority Row */}
+            {/* Pod & Priority */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Pod</label>
                     <select 
-                        className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                        className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-sm"
                         value={formData.pod}
                         onChange={e => setFormData({...formData, pod: e.target.value})}
                     >
@@ -661,7 +695,7 @@ function CreateTaskModal({ onClose, onSuccess }) {
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Priority</label>
                     <select 
-                        className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                        className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-sm"
                         value={formData.priority}
                         onChange={e => setFormData({...formData, priority: e.target.value})}
                     >
@@ -673,18 +707,18 @@ function CreateTaskModal({ onClose, onSuccess }) {
                 </div>
             </div>
 
-            {/* Dates Row */}
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Start Date</label>
-                    <input type="date" className="w-full border border-slate-300 rounded-lg p-2.5"
+                    <input type="date" className="w-full border border-slate-200 rounded-lg p-2.5 text-sm"
                         value={formData.startDate}
                         onChange={e => setFormData({...formData, startDate: e.target.value})}
                     />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Deadline</label>
-                    <input type="date" className="w-full border border-slate-300 rounded-lg p-2.5"
+                    <input type="date" className="w-full border border-slate-200 rounded-lg p-2.5 text-sm"
                         value={formData.deadline}
                         onChange={e => setFormData({...formData, deadline: e.target.value})}
                     />
@@ -695,7 +729,7 @@ function CreateTaskModal({ onClose, onSuccess }) {
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
                 <select 
-                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white"
+                    className="w-full border border-slate-200 rounded-lg p-2.5 bg-white text-sm"
                     value={formData.assigneeId}
                     onChange={e => setFormData({...formData, assigneeId: e.target.value})}
                 >
@@ -708,7 +742,7 @@ function CreateTaskModal({ onClose, onSuccess }) {
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Description</label>
                 <textarea 
-                    className="w-full border border-slate-300 rounded-lg p-3 h-32 focus:ring-2 focus:ring-brand-yellow outline-none resize-none"
+                    className="w-full border border-slate-200 rounded-lg p-3 h-32 focus:ring-2 focus:ring-yellow-400 outline-none resize-none text-sm"
                     placeholder="Describe the requirements..."
                     value={formData.description}
                     onChange={e => setFormData({...formData, description: e.target.value})}
@@ -718,9 +752,9 @@ function CreateTaskModal({ onClose, onSuccess }) {
             {/* File Upload */}
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Attachments</label>
-                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 transition relative">
-                    <Paperclip size={24} className="mb-2" />
-                    <span className="text-sm">Click to upload files (Images, PDF, Excel)</span>
+                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-slate-50 transition relative group">
+                    <Paperclip size={24} className="mb-2 group-hover:text-slate-700" />
+                    <span className="text-sm font-medium">Click to upload files (Images, PDF, Excel)</span>
                     <input 
                         type="file" multiple 
                         className="absolute inset-0 opacity-0 cursor-pointer"
@@ -728,18 +762,19 @@ function CreateTaskModal({ onClose, onSuccess }) {
                     />
                 </div>
                 {formData.files.length > 0 && (
-                    <div className="mt-2 text-xs text-brand-black font-bold">
+                    <div className="mt-2 text-xs text-slate-900 font-bold flex items-center gap-1">
+                        <CheckCircle2 size={12} className="text-green-500"/>
                         {formData.files.length} files selected
                     </div>
                 )}
             </div>
             
             <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-slate-600 font-bold hover:bg-slate-100">Cancel</button>
+                <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-lg text-slate-600 font-bold hover:bg-slate-100 text-sm">Cancel</button>
                 <button 
                     type="submit" 
                     disabled={loading}
-                    className="px-6 py-2.5 rounded-lg bg-brand-black text-white font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2.5 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2 text-sm shadow-lg"
                 >
                     {loading && <Loader2 className="animate-spin" size={16} />}
                     Create Task
@@ -751,39 +786,41 @@ function CreateTaskModal({ onClose, onSuccess }) {
   );
 }
 
-// --- 4. TEAM MEMBERS VIEW ---
+// --- VIEW: TEAM MEMBERS ---
 function TeamView() {
     const [users, setUsers] = useState([]);
     
     useEffect(() => {
-        axios.get(`${API_URL}/users`).then(res => setUsers(res.data));
+        axios.get(`${API_URL}/users`).then(res => setUsers(res.data)).catch(err => console.error(err));
     }, []);
 
     return (
-        <div className="p-8">
-            <h1 className="text-2xl font-bold text-brand-black mb-6">Team Members</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="p-8 h-full overflow-y-auto">
+            <h1 className="text-2xl font-bold text-slate-900 mb-6">Team Members</h1>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {users.map(u => (
-                    <div key={u._id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-brand-yellow flex items-center justify-center text-xl font-bold text-brand-black">
+                    <div key={u._id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition">
+                        <div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center text-xl font-bold text-slate-900">
                             {u.username[0].toUpperCase()}
                         </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800">{u.username}</h3>
-                            <p className="text-sm text-slate-500">{u.email}</p>
-                            <span className="inline-block mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Active Member</span>
+                        <div className="overflow-hidden">
+                            <h3 className="font-bold text-slate-800 truncate">{u.username}</h3>
+                            <p className="text-sm text-slate-500 truncate">{u.email}</p>
+                            <span className="inline-block mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                Active
+                            </span>
                         </div>
                     </div>
                 ))}
-            </div>
-            
-            {/* Simple Invite Mockup */}
-            <div className="mt-8 p-6 bg-slate-100 rounded-xl border border-dashed border-slate-300 text-center">
-                <h3 className="font-bold text-slate-700">Invite New Members</h3>
-                <p className="text-sm text-slate-500 mb-4">Send an invite link to add them to the team.</p>
-                <div className="flex justify-center gap-2 max-w-md mx-auto">
-                    <input type="email" placeholder="colleague@company.com" className="flex-1 p-2 border rounded-lg" />
-                    <button className="bg-brand-black text-white px-4 py-2 rounded-lg font-bold">Invite</button>
+
+                {/* Invite Card */}
+                <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-3">
+                        <Plus size={24} className="text-slate-400"/>
+                    </div>
+                    <h3 className="font-bold text-slate-700">Invite Members</h3>
+                    <p className="text-sm text-slate-500 mb-4">Share this portal link with your team.</p>
                 </div>
             </div>
         </div>
@@ -795,8 +832,8 @@ function Sidebar({ user, setToken, activeTab, setActiveTab }) {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
       <div className="p-6 flex items-center gap-3 border-b border-slate-100">
-        {logo ? <img src={logo} alt="Logo" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 bg-brand-yellow rounded"></div>}
-        <span className="text-lg font-black tracking-tighter text-brand-black">BeeBark</span>
+        {logo ? <img src={logo} alt="Logo" className="w-8 h-8 object-contain" /> : <div className="w-8 h-8 bg-yellow-400 rounded-lg"></div>}
+        <span className="text-lg font-black tracking-tighter text-slate-900">BeeBark</span>
       </div>
       
       <nav className="flex-1 px-3 py-6 space-y-1">
@@ -825,11 +862,11 @@ function Sidebar({ user, setToken, activeTab, setActiveTab }) {
 
       <div className="p-4 border-t border-slate-100 bg-slate-50">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center font-bold text-brand-black shadow-sm">
+          <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 shadow-sm">
             {user?.username?.[0]?.toUpperCase()}
           </div>
           <div className="overflow-hidden">
-            <div className="text-sm font-bold truncate text-brand-black">{user?.username}</div>
+            <div className="text-sm font-bold truncate text-slate-900">{user?.username}</div>
             <div className="text-xs text-slate-500 truncate">{user?.email}</div>
           </div>
         </div>
@@ -849,7 +886,7 @@ function SidebarItem({ children, active, onClick, icon }) {
         <button 
             onClick={onClick}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                ${active ? 'bg-brand-yellow/10 text-brand-black shadow-sm border border-brand-yellow/20' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+                ${active ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
             `}
         >
             {icon}
@@ -858,7 +895,7 @@ function SidebarItem({ children, active, onClick, icon }) {
     );
 }
 
-// --- AUTH SCREEN (Fixed CSS for Buttons) ---
+// --- AUTH SCREEN (Fixed CSS for Visibility) ---
 function AuthScreen({ setToken, setUser }) {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
@@ -875,11 +912,16 @@ function AuthScreen({ setToken, setUser }) {
       const { data } = await axios.post(`${API_URL}${endpoint}`, formData);
       
       if (isLogin) {
+        // VITAL FIX: Save to storage BEFORE state update to prevent race condition
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
         setToken(data.token);
         setUser(data.user);
       } else {
         setIsLogin(true);
         setError("Account created! Please log in.");
+        setFormData({ username: '', email: '', password: '' });
       }
     } catch (err) {
       setError(err.response?.data?.error || "Connection failed.");
@@ -892,7 +934,7 @@ function AuthScreen({ setToken, setUser }) {
     <div className="h-screen w-full flex items-center justify-center bg-slate-50">
       <div className="w-full max-w-md p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
         <div className="text-center mb-8">
-           <h1 className="text-4xl font-black text-brand-black mb-2">BeeBark</h1>
+           <h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1>
            <p className="text-slate-500">Agile project management for high-performance pods.</p>
         </div>
 
@@ -900,7 +942,7 @@ function AuthScreen({ setToken, setUser }) {
            <div>
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label>
               <input 
-                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
                 value={formData.username}
                 onChange={e => setFormData({...formData, username: e.target.value})}
                 required
@@ -912,7 +954,7 @@ function AuthScreen({ setToken, setUser }) {
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label>
                 <input 
                   type="email"
-                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
                   required
@@ -924,16 +966,16 @@ function AuthScreen({ setToken, setUser }) {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
               <input 
                 type="password"
-                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-yellow transition"
+                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
                 value={formData.password}
                 onChange={e => setFormData({...formData, password: e.target.value})}
                 required
               />
            </div>
 
-           {error && <div className="text-center text-sm text-red-500 bg-red-50 p-2 rounded-lg">{error}</div>}
+           {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
 
-           {/* FIXED BUTTON CSS: explicitly set bg-brand-black text-white */}
+           {/* FIXED BUTTON: Force Dark Background */}
            <button 
              type="submit" 
              disabled={loading}
@@ -945,7 +987,7 @@ function AuthScreen({ setToken, setUser }) {
         </form>
         
         <div className="text-center mt-6">
-            <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-brand-black transition">
+            <button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">
                 {isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}
             </button>
         </div>

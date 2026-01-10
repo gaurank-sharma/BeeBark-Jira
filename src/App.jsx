@@ -401,7 +401,7 @@ import {
 } from 'lucide-react';
 import logo from './assets/logo.png'; 
 
-const API_URL = 'localhost:5000/api';
+const API_URL = 'https://bee-bark-jira-backend.vercel.app/api';
 
 // --- AXIOS INTERCEPTOR (Fixes "Already Logged In" Bug) ---
 axios.interceptors.request.use((config) => {

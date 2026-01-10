@@ -503,17 +503,15 @@
 
 
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { 
   Trash2, Plus, LogOut, User as UserIcon, Loader2, 
   Calendar, Paperclip, LayoutGrid, Users, CheckCircle2, 
-  Lock, X, Download, FileText, Clock, Edit2, Save, 
-  ExternalLink, ChevronDown, AlertCircle, Ban, Eye
+  Lock, X, FileText, Clock, ExternalLink, ChevronDown, 
+  Ban, Eye, MoreHorizontal 
 } from 'lucide-react';
-import logo from './assets/logo.png'; 
 
 // --- CONFIGURATION ---
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api'; 
@@ -566,7 +564,7 @@ export default function App() {
   );
 }
 
-// --- COMPONENT: CUSTOM USER SELECTOR (Beautiful UI) ---
+// --- HELPER: USER SELECT COMPONENT ---
 function UserSelect({ users, selectedId, onChange, label, type = "assignee" }) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -582,11 +580,11 @@ function UserSelect({ users, selectedId, onChange, label, type = "assignee" }) {
   const selectedUser = users.find(u => u._id === selectedId);
 
   return (
-    <div className="relative" ref={wrapperRef}>
+    <div className="relative mb-4" ref={wrapperRef}>
       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">{label}</label>
       <div 
         onClick={() => setIsOpen(!isOpen)} 
-        className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-blue-400 transition shadow-sm"
+        className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-blue-400 transition shadow-sm"
       >
         <div className="flex items-center gap-2">
           {selectedUser ? (
@@ -597,7 +595,7 @@ function UserSelect({ users, selectedId, onChange, label, type = "assignee" }) {
               <span className="text-sm font-medium text-slate-700">{selectedUser.username}</span>
             </>
           ) : (
-            <span className="text-sm text-slate-400 italic">Unassigned</span>
+            <span className="text-sm text-slate-400 italic">Select User...</span>
           )}
         </div>
         <ChevronDown size={14} className="text-slate-400"/>
@@ -632,12 +630,16 @@ function UserSelect({ users, selectedId, onChange, label, type = "assignee" }) {
 // --- VIEW: KANBAN BOARD ---
 function BoardView({ currentUser, filter }) {
   const [tasks, setTasks] = useState([]);
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  
+  // Drawer State
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState('create'); // 'create' or 'edit'
   const [selectedTask, setSelectedTask] = useState(null);
+
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [users, setUsers] = useState([]);
   
-  // Added "Blocked" to columns
-  const columns = ['To Do', 'In Progress', 'Blocked', 'Done'];
+  const columns = ['To Do', 'In Progress', 'Done'];
 
   useEffect(() => {
       axios.get(`${API_URL}/users`).then(res => setUsers(res.data)).catch(console.error);
@@ -653,13 +655,22 @@ function BoardView({ currentUser, filter }) {
   const onDragEnd = async (result) => {
     if (!result.destination) return;
     const { draggableId, destination } = result;
-    
-    // Optimistic Update
     const updated = tasks.map(t => t._id === draggableId ? { ...t, status: destination.droppableId } : t);
     setTasks(updated);
-
-    // API Call
     await axios.put(`${API_URL}/tasks/${draggableId}`, { status: destination.droppableId });
+  };
+
+  // Handlers for opening the unified drawer
+  const openCreateDrawer = () => {
+    setSelectedTask(null);
+    setDrawerMode('create');
+    setDrawerOpen(true);
+  };
+
+  const openEditDrawer = (task) => {
+    setSelectedTask(task);
+    setDrawerMode('edit');
+    setDrawerOpen(true);
   };
 
   return (
@@ -667,12 +678,17 @@ function BoardView({ currentUser, filter }) {
       {/* HEADER */}
       <header className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
         <div>
-           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{filter === 'my-tasks' ? 'My Assignments' : 'Product Roadmap'}</h1>
-           <p className="text-slate-500 text-sm mt-1">Manage tasks, bugs, and features.</p>
+           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{filter === 'my-tasks' ? 'My Assignments' : 'Project Board'}</h1>
+           <p className="text-slate-500 text-sm mt-1">Manage tasks and team pods.</p>
         </div>
-        <button onClick={() => setIsTaskModalOpen(true)} className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg shadow-slate-200">
-             <Plus size={18} /> Create Issue
-        </button>
+        <div className="flex gap-3">
+            <button onClick={() => setIsTeamModalOpen(true)} className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm">
+              <Users size={18} /> New Pod
+            </button>
+            <button onClick={openCreateDrawer} className="bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg shadow-slate-200">
+                <Plus size={18} /> Create Task
+            </button>
+        </div>
       </header>
 
       {/* BOARD AREA */}
@@ -681,26 +697,20 @@ function BoardView({ currentUser, filter }) {
           <div className="flex h-full gap-6 min-w-max">
             {columns.map(status => (
               <div key={status} className="w-[340px] flex flex-col h-full bg-slate-100/50 rounded-xl border border-slate-200/60">
-                {/* Column Header */}
                 <div className="p-3 flex justify-between items-center border-b border-slate-200/50">
                   <div className="flex items-center gap-2">
-                     <div className={`w-2 h-2 rounded-full 
-                        ${status === 'Done' ? 'bg-green-500' : 
-                          status === 'Blocked' ? 'bg-red-500' :
-                          status === 'In Progress' ? 'bg-blue-500' : 'bg-slate-400'}`
-                     }></div>
+                     <div className={`w-2 h-2 rounded-full ${status === 'Done' ? 'bg-green-500' : status === 'In Progress' ? 'bg-blue-500' : 'bg-slate-400'}`}></div>
                      <span className="font-bold text-slate-700 text-xs uppercase tracking-wider">{status}</span>
                   </div>
                   <span className="bg-white px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 border">{tasks.filter(t => t.status === status).length}</span>
                 </div>
-
                 <Droppable droppableId={status}>
                   {(provided, snapshot) => (
                     <div {...provided.droppableProps} ref={provided.innerRef} 
                       className={`flex-1 p-2 overflow-y-auto custom-scrollbar transition-colors ${snapshot.isDraggingOver ? 'bg-blue-50/50' : ''}`}
                     >
                       {tasks.filter(t => t.status === status).map((task, index) => (
-                        <TaskCard key={task._id} task={task} index={index} onClick={() => setSelectedTask(task)} />
+                        <TaskCard key={task._id} task={task} index={index} onClick={() => openEditDrawer(task)} />
                       ))}
                       {provided.placeholder}
                     </div>
@@ -712,72 +722,134 @@ function BoardView({ currentUser, filter }) {
         </DragDropContext>
       </div>
 
-      {isTaskModalOpen && <CreateTaskModal onClose={() => setIsTaskModalOpen(false)} onSuccess={fetchTasks} currentUser={currentUser} users={users} />}
-      
-      {/* NEW SLIDE-OVER DRAWER (Replaces Modal) */}
+      {/* UNIFIED TASK DRAWER (Handles Create & Edit) */}
       <TaskDrawer 
-        task={selectedTask} 
-        isOpen={!!selectedTask}
-        users={users} 
-        onClose={() => setSelectedTask(null)} 
-        onUpdate={fetchTasks} 
+        isOpen={drawerOpen}
+        mode={drawerMode}
+        task={selectedTask}
+        users={users}
+        currentUser={currentUser}
+        onClose={() => setDrawerOpen(false)}
+        onSuccess={fetchTasks}
       />
+
+      {isTeamModalOpen && <CreateTeamModal onClose={() => setIsTeamModalOpen(false)} onSuccess={() => alert("Pod Created!")} />}
     </div>
   );
 }
 
-// --- NEW COMPONENT: SLIDE-OVER TASK DRAWER (Jira/Linear Style) ---
-function TaskDrawer({ task, isOpen, onClose, onUpdate, users }) {
-  const [editForm, setEditForm] = useState(null);
-  
-  // Sync state when task opens
-  useEffect(() => { if (task) setEditForm({ ...task }); }, [task]);
+// --- NEW COMPONENT: TASK DRAWER (UI MATCHING SCREENSHOT) ---
+function TaskDrawer({ isOpen, mode, task, users, currentUser, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  if (!isOpen || !editForm) return null;
+  // Initialize form based on mode
+  useEffect(() => {
+    if (mode === 'edit' && task) {
+        setFormData({ ...task });
+    } else {
+        setFormData({
+            title: '', description: '', priority: 'Medium', status: 'To Do',
+            pod: 'Development', assignee: '', reporter: currentUser?._id,
+            deadline: new Date().toISOString().split('T')[0], attachments: []
+        });
+    }
+  }, [mode, task, currentUser, isOpen]);
 
-  const handleSave = async (updates) => {
-    // Optimistic local update
-    setEditForm(prev => ({ ...prev, ...updates }));
-    
+  const handleSave = async (e) => {
+    if(e) e.preventDefault();
+    setLoading(true);
+
     try {
-      await axios.put(`${API_URL}/tasks/${task._id}`, {
-        ...editForm,
-        ...updates,
-        assigneeId: updates.assignee ? updates.assignee : (editForm.assignee?._id || editForm.assignee),
-        reporterId: updates.reporter ? updates.reporter : (editForm.reporter?._id || editForm.reporter),
-      });
-      onUpdate(); // Refresh board
-    } catch (err) { console.error(err); }
+        if (mode === 'create') {
+            const data = new FormData();
+            // Map flat form data to what backend expects for creation
+            data.append('title', formData.title);
+            data.append('description', formData.description || '');
+            data.append('priority', formData.priority);
+            data.append('status', formData.status);
+            data.append('pod', formData.pod);
+            data.append('assigneeId', formData.assignee || '');
+            data.append('reporterId', formData.reporter || '');
+            data.append('deadline', formData.deadline);
+            // Handle file uploads if any (simplified for demo)
+            if(formData.newFiles) {
+                for(let i=0; i<formData.newFiles.length; i++) data.append('files', formData.newFiles[i]);
+            }
+            await axios.post(`${API_URL}/tasks`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        } else {
+            // Update Logic
+            await axios.put(`${API_URL}/tasks/${task._id}`, {
+                ...formData,
+                assigneeId: formData.assignee?._id || formData.assignee,
+                reporterId: formData.reporter?._id || formData.reporter,
+            });
+        }
+        onSuccess();
+        onClose();
+    } catch (err) {
+        console.error(err);
+        alert("Operation failed");
+    } finally {
+        setLoading(false);
+    }
   };
+
+  // Helper for immediate updates in Edit mode (Autosave feel)
+  const updateField = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  if (!isOpen) return null;
+
+  const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media", "Sales", "Operations"];
 
   return (
     <>
        {/* Backdrop */}
-       <div onClick={onClose} className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity"></div>
+       <div onClick={onClose} className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity"></div>
        
-       {/* Drawer Panel */}
+       {/* Drawer Panel - Right Side */}
        <div className="fixed inset-y-0 right-0 w-full max-w-4xl bg-white shadow-2xl z-50 transform transition-transform flex flex-col border-l border-slate-200">
           
-          {/* Drawer Header */}
+          {/* Header */}
           <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded border">ISSUE-{task._id.slice(-4).toUpperCase()}</span>
+                {mode === 'edit' ? (
+                     <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                        {task?._id ? `ISSUE-${task._id.slice(-4).toUpperCase()}` : 'LOADING...'}
+                     </span>
+                ) : (
+                    <span className="text-sm font-bold text-slate-800">New Issue</span>
+                )}
              </div>
              <div className="flex gap-2">
-               <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800 transition"><X size={20}/></button>
+                {mode === 'create' && (
+                    <button onClick={handleSave} disabled={loading} className="px-4 py-1.5 bg-slate-900 text-white text-sm font-bold rounded hover:bg-slate-800">
+                        {loading ? 'Creating...' : 'Create Task'}
+                    </button>
+                )}
+                {mode === 'edit' && (
+                    <button onClick={handleSave} className="px-4 py-1.5 bg-blue-600 text-white text-sm font-bold rounded hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                )}
+                <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800 transition"><X size={20}/></button>
              </div>
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             
-            {/* LEFT COLUMN: CONTENT (Scrollable) */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 border-r border-slate-100">
-               {/* Title Input */}
+            {/* LEFT COLUMN: CONTENT (65%) */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-8 border-r border-slate-100 bg-white">
+               
+               {/* Title */}
                <input 
-                 className="w-full text-2xl font-bold text-slate-900 placeholder:text-slate-300 outline-none bg-transparent mb-6 resize-none"
-                 value={editForm.title}
-                 onChange={(e) => handleSave({ title: e.target.value })}
+                 className="w-full text-3xl font-bold text-slate-900 placeholder:text-slate-300 outline-none bg-transparent mb-6"
+                 value={formData.title}
+                 onChange={(e) => updateField('title', e.target.value)}
                  placeholder="Issue Title"
+                 autoFocus={mode === 'create'}
                />
 
                {/* Description */}
@@ -786,24 +858,24 @@ function TaskDrawer({ task, isOpen, onClose, onUpdate, users }) {
                     <FileText size={14}/> Description
                   </label>
                   <textarea 
-                    className="w-full min-h-[150px] p-4 text-sm leading-relaxed text-slate-700 bg-slate-50 border border-transparent rounded-lg focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all resize-none"
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({...editForm, description: e.target.value})} // Local only first
-                    onBlur={(e) => handleSave({ description: e.target.value })} // Save on blur
+                    className="w-full min-h-[200px] p-4 text-sm leading-relaxed text-slate-700 bg-slate-50 border border-transparent rounded-lg focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all resize-none"
+                    value={formData.description}
+                    onChange={(e) => updateField('description', e.target.value)}
                     placeholder="Add a detailed description..."
                   />
                </div>
 
-               {/* Attachments Section (FIXED) */}
+               {/* Attachments */}
                <div className="mb-8">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Paperclip size={14}/> Attachments
                   </label>
                   
-                  {editForm.attachments && editForm.attachments.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3">
-                       {editForm.attachments.map((file, idx) => {
-                          const isPdf = file.url.toLowerCase().endsWith('.pdf') || (file.format && file.format.includes('pdf'));
+                  {/* Existing Attachments */}
+                  {formData.attachments && formData.attachments.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                       {formData.attachments.map((file, idx) => {
+                          const isPdf = file.url?.toLowerCase().endsWith('.pdf') || file.format?.includes('pdf');
                           return (
                              <a href={file.url} target="_blank" rel="noopener noreferrer" key={idx} 
                                 className="group flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:border-blue-300 hover:shadow-md transition bg-white"
@@ -820,87 +892,109 @@ function TaskDrawer({ task, isOpen, onClose, onUpdate, users }) {
                           )
                        })}
                     </div>
-                  ) : (
-                    <div className="p-6 border border-dashed border-slate-200 rounded-lg text-center text-sm text-slate-400 bg-slate-50/50">
-                      No attachments
-                    </div>
                   )}
+
+                  {/* Upload Field */}
+                  <div className="border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center bg-slate-50/50 relative">
+                      <span className="text-sm text-slate-400 font-medium">Click to upload new files</span>
+                      <input 
+                        type="file" multiple 
+                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                        onChange={e => updateField('newFiles', e.target.files)} 
+                      />
+                      {formData.newFiles && <div className="text-xs text-blue-600 font-bold mt-2">{formData.newFiles.length} files selected</div>}
+                  </div>
                </div>
             </div>
 
-            {/* RIGHT COLUMN: META DATA (Fixed Width) */}
-            <div className="w-full md:w-80 bg-slate-50/80 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-100">
+            {/* RIGHT COLUMN: META DATA (35%) - GRAY SIDEBAR */}
+            <div className="w-full md:w-[320px] bg-slate-50/80 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-100">
                
-               {/* Status Selector */}
+               {/* Status */}
                <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Status</label>
-                  <select 
-                     value={editForm.status} 
-                     onChange={(e) => handleSave({ status: e.target.value })}
-                     className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-bold py-2 px-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
-                  >
-                     <option value="To Do">To Do</option>
-                     <option value="In Progress">In Progress</option>
-                     <option value="Blocked">Blocked ⛔</option>
-                     <option value="Done">Done ✅</option>
-                     <option value="Not Required">Not Required ⚪</option>
-                  </select>
+                  <div className="relative">
+                      <select 
+                        value={formData.status} 
+                        onChange={(e) => updateField('status', e.target.value)}
+                        className="w-full appearance-none bg-white border border-slate-200 text-slate-800 text-sm font-bold py-3 px-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer shadow-sm"
+                      >
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Done">Done</option>
+                      </select>
+                      <ChevronDown size={16} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none"/>
+                  </div>
                </div>
 
-               {/* Priority Selector */}
+               {/* Priority (Buttons Style) */}
                <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Priority</label>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-4 gap-1">
                      {['Low', 'Medium', 'High', 'Critical'].map(p => (
                         <button 
                            key={p}
-                           onClick={() => handleSave({ priority: p })}
-                           className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded border transition-all ${editForm.priority === p ? 
-                             (p === 'Critical' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-slate-800 text-white border-slate-800') 
-                             : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                           onClick={() => updateField('priority', p)}
+                           className={`py-1.5 text-[10px] font-bold uppercase rounded border transition-all 
+                           ${formData.priority === p 
+                             ? (p === 'Critical' ? 'bg-red-900 text-white border-red-900' : 'bg-slate-800 text-white border-slate-800') 
+                             : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
                         >
                            {p}
                         </button>
                      ))}
                   </div>
                </div>
-
+               
                <hr className="border-slate-200" />
 
-               {/* Assignee Select */}
+               {/* POD / TEAM SELECTOR (Added per request) */}
+               <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Pod / Team</label>
+                  <div className="relative">
+                      <select 
+                        value={formData.pod} 
+                        onChange={(e) => updateField('pod', e.target.value)}
+                        className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium py-2.5 px-3 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 cursor-pointer"
+                      >
+                        {PODS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <Users size={14} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none"/>
+                  </div>
+               </div>
+
+               {/* Assignee */}
                <UserSelect 
                   users={users} 
-                  selectedId={editForm.assignee?._id || editForm.assignee} 
-                  onChange={(id) => handleSave({ assignee: id })} 
+                  selectedId={formData.assignee?._id || formData.assignee} 
+                  onChange={(id) => updateField('assignee', id)} 
                   label="Assignee" 
                   type="assignee"
                />
 
-               {/* Reporter Select (For Email Logic) */}
+               {/* Reporter */}
                <UserSelect 
                   users={users} 
-                  selectedId={editForm.reporter?._id || editForm.reporter} 
-                  onChange={(id) => handleSave({ reporter: id })} 
+                  selectedId={formData.reporter?._id || formData.reporter} 
+                  onChange={(id) => updateField('reporter', id)} 
                   label="Reporter (Receives Email)" 
                   type="reporter"
                />
 
                <hr className="border-slate-200" />
                
-               {/* Dates */}
+               {/* Timeline */}
                <div>
                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Timeline</label>
-                 <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-slate-600 bg-white p-2 rounded border border-slate-200">
-                       <Clock size={14} className="text-slate-400"/> 
-                       <span className="text-xs text-slate-400">Due:</span>
+                 <div className="flex items-center gap-2 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                       <Clock size={16} className="text-slate-400"/> 
+                       <span className="text-xs text-slate-400 font-bold uppercase mr-2">Due:</span>
                        <input 
                          type="date" 
-                         value={editForm.deadline ? editForm.deadline.split('T')[0] : ''}
-                         onChange={(e) => handleSave({ deadline: e.target.value })}
-                         className="outline-none text-slate-700 font-medium bg-transparent w-full"
+                         value={formData.deadline ? formData.deadline.split('T')[0] : ''}
+                         onChange={(e) => updateField('deadline', e.target.value)}
+                         className="outline-none text-slate-700 font-bold bg-transparent w-full"
                        />
-                    </div>
                  </div>
                </div>
 
@@ -911,14 +1005,12 @@ function TaskDrawer({ task, isOpen, onClose, onUpdate, users }) {
   );
 }
 
-// --- TASK CARD (Updated UI with Blocked State) ---
+// --- TASK CARD ---
 function TaskCard({ task, index, onClick }) {
-  const isBlocked = task.status === 'Blocked';
   const isDone = task.status === 'Done';
-  const isNotRequired = task.status === 'Not Required';
-
+  
   return (
-    <Draggable draggableId={task._id} index={index} isDragDisabled={isNotRequired}>
+    <Draggable draggableId={task._id} index={index}>
       {(provided, snapshot) => (
         <div 
           ref={provided.innerRef} 
@@ -926,51 +1018,41 @@ function TaskCard({ task, index, onClick }) {
           {...provided.dragHandleProps} 
           onClick={onClick} 
           className={`
-            bg-white p-3.5 rounded-lg border mb-3 shadow-sm hover:shadow-md transition-all group relative cursor-pointer
-            ${snapshot.isDragging ? 'rotate-2 shadow-2xl ring-2 ring-blue-500 z-50' : ''}
-            ${isBlocked ? 'border-l-4 border-l-red-500 border-red-100 bg-red-50/30' : 'border-slate-200 border-l-4 border-l-transparent'}
-            ${isNotRequired ? 'opacity-50 grayscale' : ''}
+            bg-white p-4 rounded-xl border mb-3 shadow-sm hover:shadow-md transition-all group relative cursor-pointer
+            ${snapshot.isDragging ? 'rotate-2 shadow-2xl ring-2 ring-blue-500 z-50' : 'border-slate-200'}
             ${isDone ? 'opacity-75' : ''}
           `}
         >
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2 mb-2">
-            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 tracking-wide">{task.pod}</span>
-            {isBlocked && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 flex items-center gap-1"><Ban size={10}/> Blocked</span>}
-            {task.priority === 'Critical' && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600">Critical</span>}
+          <div className="flex justify-between items-start mb-2">
+             <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-500 tracking-wide border border-slate-200">{task.pod}</span>
+             {task.priority === 'Critical' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
           </div>
 
-          <h4 className={`font-medium text-slate-800 text-sm mb-3 leading-snug ${isDone ? 'line-through text-slate-500' : ''}`}>
+          <h4 className={`font-semibold text-slate-800 text-sm mb-3 leading-snug ${isDone ? 'line-through text-slate-400' : ''}`}>
              {task.title}
           </h4>
 
-          <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+          <div className="flex justify-between items-center pt-3 border-t border-slate-50">
             <div className="flex items-center gap-2">
                 {task.assignee ? (
-                    <div className="flex items-center gap-1.5 pr-2 rounded-full">
-                         <div className="w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center text-[9px] font-bold text-white shadow-sm border border-white">
+                    <div className="flex items-center gap-2">
+                         <div className="w-6 h-6 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-white">
                            {task.assignee.username[0].toUpperCase()}
                          </div>
                     </div>
                 ) : (
-                    <div className="w-5 h-5 rounded-full border border-dashed border-slate-300 flex items-center justify-center">
-                       <UserIcon size={10} className="text-slate-300"/>
+                    <div className="w-6 h-6 rounded-full border border-dashed border-slate-300 flex items-center justify-center">
+                       <UserIcon size={12} className="text-slate-300"/>
                     </div>
                 )}
             </div>
             
             <div className="flex items-center gap-3">
                 {task.deadline && (
-                  <div className={`flex items-center gap-1 text-[10px] font-medium ${new Date(task.deadline) < new Date() && !isDone ? 'text-red-500' : 'text-slate-400'}`}>
-                    <Calendar size={10} />
+                  <div className={`flex items-center gap-1 text-[10px] font-bold ${new Date(task.deadline) < new Date() && !isDone ? 'text-red-500' : 'text-slate-400'}`}>
+                    <Calendar size={12} />
                     {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
                   </div>
-                )}
-                {task.attachments?.length > 0 && (
-                   <div className="flex items-center gap-1 text-slate-400">
-                     <Paperclip size={10} />
-                     <span className="text-[10px]">{task.attachments.length}</span>
-                   </div>
                 )}
             </div>
           </div>
@@ -980,7 +1062,7 @@ function TaskCard({ task, index, onClick }) {
   );
 }
 
-// --- SIDEBAR (Cleaned Up) ---
+// --- SIDEBAR ---
 function Sidebar({ user, setToken, activeTab, setActiveTab }) {
   return (
     <aside className="w-[240px] bg-slate-900 text-slate-300 flex flex-col shrink-0">
@@ -1025,71 +1107,44 @@ function SidebarItem({ children, active, onClick, icon }) {
     );
 }
 
-// --- MODALS AND OTHER SCREENS ---
-// (Keeping AuthScreen and TeamView simple as they were fine, just styling updates)
-
-function CreateTaskModal({ onClose, onSuccess, currentUser, users }) {
+// --- MODAL: CREATE TEAM (Kept as requested) ---
+function CreateTeamModal({ onClose, onSuccess }) {
+  const [name, setName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '', description: '', priority: 'Medium', pod: 'Development', assigneeId: '',
-    startDate: new Date().toISOString().split('T')[0], deadline: '', files: [],
-    reporterId: currentUser._id
-  });
 
+  useEffect(() => { axios.get(`${API_URL}/users`).then(res => setUsers(res.data)); }, []);
+  const toggleMember = (id) => setSelectedMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  
   const handleSubmit = async (e) => {
     e.preventDefault(); setLoading(true);
-    const data = new FormData();
-    Object.keys(formData).forEach(key => {
-        if(key === 'files') { for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]); } 
-        else { data.append(key, formData[key]); }
-    });
-    try { await axios.post(`${API_URL}/tasks`, data, { headers: { 'Content-Type': 'multipart/form-data' } }); onSuccess(); onClose(); } 
-    catch(err) { alert("Failed."); } finally { setLoading(false); }
+    try { await axios.post(`${API_URL}/teams`, { name, isPrivate, members: selectedMembers }); onSuccess(); onClose(); } catch(err) { alert("Failed."); } finally { setLoading(false); }
   };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-            <h2 className="text-lg font-bold text-slate-800">Create New Issue</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={20}/></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <div>
-               <label className="text-[10px] font-bold text-slate-400 uppercase">Title</label>
-               <input className="w-full border border-slate-200 rounded p-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium" placeholder="Task summary" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Reporter (Notify)</label>
-                  <select className="w-full border border-slate-200 rounded p-2 text-sm bg-white" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
-                     {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                  </select>
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Assignee</label>
-                  <select className="w-full border border-slate-200 rounded p-2 text-sm bg-white" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                     <option value="">Unassigned</option>
-                     {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                  </select>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-               <div><label className="text-[10px] font-bold text-slate-400 uppercase">Priority</label><select className="w-full border border-slate-200 rounded p-2 text-sm bg-white" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
-               <div><label className="text-[10px] font-bold text-slate-400 uppercase">Deadline</label><input type="date" className="w-full border border-slate-200 rounded p-2 text-sm" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} /></div>
-            </div>
-
-            <div><label className="text-[10px] font-bold text-slate-400 uppercase">Description</label><textarea className="w-full border border-slate-200 rounded p-2 h-24 text-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
-            
-            <div>
-               <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Attachments</label>
-               <input type="file" multiple className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setFormData({...formData, files: e.target.files})} />
-            </div>
-
-            <button type="submit" disabled={loading} className="w-full py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 flex justify-center items-center gap-2">{loading && <Loader2 className="animate-spin" size={16} />} Create Issue</button>
-        </form>
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6 animate-in zoom-in duration-200">
+         <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-900">Create New Pod</h2><button onClick={onClose} className="text-slate-400 hover:text-red-500">✕</button></div>
+         <form onSubmit={handleSubmit} className="space-y-4">
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod Name</label><input className="w-full border border-slate-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-yellow-400 font-medium" placeholder="e.g. Secret Project X" value={name} onChange={e => setName(e.target.value)} required /></div>
+            <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-yellow-400" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} /><div><span className="block text-sm font-bold text-slate-800 flex items-center gap-2"><Lock size={14} /> Secret Team?</span><span className="block text-xs text-slate-500">Only selected members see this.</span></div></label>
+            {isPrivate && (
+                <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label>
+                    <div className="h-48 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
+                        {users.length > 0 ? users.map(u => (
+                            <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-200 rounded cursor-pointer transition">
+                                <input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900 w-4 h-4"/>
+                                <span className="text-sm font-medium text-slate-700">{u.username}</span>
+                            </label>
+                        )) : <div className="text-center text-slate-400 text-sm mt-4">No other users found.</div>}
+                    </div>
+                </div>
+            )}
+            <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Pod</button></div>
+         </form>
       </div>
     </div>
   );
@@ -1100,7 +1155,6 @@ function AuthScreen({ setToken, setUser }) {
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
   const handleSubmit = async (e) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
@@ -1110,27 +1164,23 @@ function AuthScreen({ setToken, setUser }) {
       else { setIsLogin(true); setError("Account created! Please log in."); setFormData({ username: '', email: '', password: '' }); }
     } catch (err) { setError(err.response?.data?.error || "Connection failed."); } finally { setLoading(false); }
   };
-
   return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-100">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl">
-        <h1 className="text-3xl font-black text-slate-900 mb-2 text-center">BeeBark</h1>
-        <p className="text-slate-500 text-center mb-8">Login to your workspace</p>
+      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl border border-slate-100">
+        <div className="text-center mb-8"><h1 className="text-3xl font-black text-slate-900 mb-2">BeeBark</h1><p className="text-slate-500">Sign in to your workspace</p></div>
         <form onSubmit={handleSubmit} className="space-y-4">
            {!isLogin && <input className="w-full border p-3 rounded-lg bg-slate-50" placeholder="Username" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />}
            <input type="email" className="w-full border p-3 rounded-lg bg-slate-50" placeholder="Email address" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
            <input type="password" className="w-full border p-3 rounded-lg bg-slate-50" placeholder="Password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
-           {error && <div className="text-red-500 text-sm text-center">{error}</div>}
-           <button className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">{loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}</button>
+           {error && <div className="text-red-500 text-sm text-center font-bold">{error}</div>}
+           <button className="w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-800 transition shadow-lg">{loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}</button>
         </form>
-        <div className="text-center mt-4">
-           <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-600 hover:underline">{isLogin ? "No account? Create one" : "Already have an account?"}</button>
-        </div>
+        <div className="text-center mt-4"><button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-600 hover:underline font-bold">{isLogin ? "No account? Create one" : "Already have an account?"}</button></div>
       </div>
     </div>
   );
 }
 
 function TeamView() {
-    return <div className="p-10 text-center text-slate-500">Team View Component (Add your logic here)</div>
+    return <div className="p-10 text-center text-slate-500 font-bold">Select "New Pod" to create a team or view Board.</div>
 }

@@ -1125,22 +1125,27 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
 function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
   
-  // Safe extraction of initial Team ID
+  // --- FIX: Safely extract Team ID and Pod from Parent ---
   const getInitialTeamId = () => {
-      if(activeTeam && activeTeam._id) return activeTeam._id;
-      if(parentTask) {
-          // Parent task might have team populated (object) or just ID string
-          return parentTask.team?._id || parentTask.team || ''; 
+      if (activeTeam) return activeTeam._id;
+      if (parentTask) {
+          // Check if parentTask.team is an object (populated) or just an ID string
+          return typeof parentTask.team === 'object' ? parentTask.team._id : parentTask.team; 
       }
       return '';
+  };
+
+  const getInitialPod = () => {
+      if (parentTask) return parentTask.pod;
+      return 'Development'; // Default
   };
 
   const [formData, setFormData] = useState({
     title: '', description: '', 
     status: 'To Do',
     priority: 'Medium', 
-    teamId: getInitialTeamId(),
-    pod: parentTask ? parentTask.pod : 'Development',
+    teamId: getInitialTeamId(), // Use the safe helper
+    pod: getInitialPod(),       // Use the safe helper
     assigneeId: '',
     startDate: new Date().toISOString().split('T')[0], 
     deadline: '', 
@@ -1152,6 +1157,10 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 
   const handleSubmit = async (e) => {
     e.preventDefault(); 
+    
+    // Debugging: Check what is missing
+    // console.log("Form Data:", formData);
+
     if(!formData.teamId || !formData.assigneeId || !formData.reporterId || !formData.deadline || !formData.title || !formData.description || !formData.pod) {
         alert("Please fill all mandatory fields marked with *");
         return;
@@ -1169,14 +1178,17 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
         onSuccess(); 
         onClose(); 
     } 
-    catch(err) { alert("Failed to create task."); } finally { setLoading(false); }
+    catch(err) { 
+        console.error(err);
+        alert("Failed to create task. Check console for details."); 
+    } finally { setLoading(false); }
   };
 
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
-
-  return (
+return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
+        {/* ... Header ... */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
             <h2 className="text-lg font-bold text-slate-800">
                 {parentTask ? `New Subtask for ${parentTask.taskId}` : 'New Task'} 
@@ -1190,6 +1202,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
             </div>
         </div>
 
+        {/* ... Body ... */}
         <div className="flex flex-1 overflow-hidden">
             <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
                  <input className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
@@ -1209,6 +1222,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
             </div>
 
             <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                {/* ... Status & Priority Selectors ... */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
@@ -1221,22 +1235,37 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                         <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
                     </select>
                 </div>
-                
+
+                {/* FIX: Ensure Team Select is using the safe ID and disabled correctly */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.teamId} onChange={e => setFormData({...formData, teamId: e.target.value})} disabled={!!parentTask}>
+                    <select 
+                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm" 
+                        value={formData.teamId} 
+                        onChange={e => setFormData({...formData, teamId: e.target.value})} 
+                        disabled={!!parentTask} // Disabled if it's a subtask
+                        style={{ opacity: !!parentTask ? 0.7 : 1 }}
+                    >
                         <option value="">Select Team</option>
                         {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
                     </select>
                 </div>
 
+                {/* FIX: Ensure Pod Select is using the safe Pod and disabled correctly */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.pod} onChange={e => setFormData({...formData, pod: e.target.value})}>
+                    <select 
+                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm" 
+                        value={formData.pod} 
+                        onChange={e => setFormData({...formData, pod: e.target.value})}
+                        disabled={!!parentTask} // Disabled if it's a subtask
+                        style={{ opacity: !!parentTask ? 0.7 : 1 }}
+                    >
                         {PODS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                 </div>
 
+                {/* ... Rest of Selectors (Assignee, Reporter, Date) ... */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>

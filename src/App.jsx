@@ -708,7 +708,7 @@ import {
   Trash2, Plus, LogOut, User as UserIcon, Loader2, 
   Calendar, Paperclip, LayoutGrid, Users, CheckCircle2, 
   Lock, X, Download, FileText, Clock, Edit2, Save, ExternalLink,
-  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight
+  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check
 } from 'lucide-react';
 import logo from './assets/logo.png'; 
 
@@ -797,10 +797,7 @@ function BoardView({ currentUser, activeTeam, filter }) {
     
     try {
         const { data } = await axios.get(endpoint);
-        // Filter out subtasks from the main board to avoid duplication
-        // Only show tasks where parentTask is null
-        const topLevelTasks = data.filter(t => !t.parentTask);
-        setTasks(topLevelTasks);
+       setTasks(data);
         
         // If a task is currently selected, refresh its data from the full list
         if(selectedTask) {
@@ -941,6 +938,7 @@ function BoardView({ currentUser, activeTeam, filter }) {
 // --- TASK DETAIL MODAL ---
 function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtask, onSelectSubtask }) {
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
@@ -964,6 +962,12 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
     finally { setLoading(false); }
   };
 
+  const handleCopyId = () => {
+      navigator.clipboard.writeText(task.taskId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
+
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
 
   return (
@@ -972,9 +976,18 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
         {/* HEADER */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
             <div className="flex items-center gap-3">
-                <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider">
+                {/* <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider">
                     {task.taskId}
-                </span>
+                </span> */}
+
+                <button 
+                    onClick={handleCopyId}
+                    className="flex items-center gap-2 bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition"
+                    title="Click to Copy ID"
+                >
+                    {task.taskId}
+                    {copied ? <Check size={12} className="text-green-600"/> : <Copy size={12}/>}
+                </button>
                 {task.parentTask && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Subtask</span>}
                 <input 
                     className="font-bold text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent w-96 hover:bg-slate-50 rounded px-1 transition" 
@@ -1247,19 +1260,44 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 }
 
 // --- TASK CARD ---
+// --- TASK CARD (Updated with Copy Icon) ---
 function TaskCard({ task, index, onClick }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e) => {
+      e.stopPropagation(); // Prevent opening the modal
+      navigator.clipboard.writeText(task.taskId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Draggable draggableId={task._id} index={index}>
       {(provided, snapshot) => (
         <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} onClick={onClick} className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative cursor-pointer ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}>
+          
           <div className="flex justify-between items-start mb-2">
-             <span className="text-[10px] font-bold text-slate-500 hover:text-blue-600 transition">{task.taskId}</span>
-             <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{task.priority}</span>
+             <div className="flex items-center gap-1 group/id">
+                 <span className="text-[10px] font-bold text-slate-500 group-hover/id:text-blue-600 transition">
+                    {task.taskId}
+                 </span>
+                 {/* COPY ICON BUTTON */}
+                 <button 
+                    onClick={handleCopy} 
+                    className="opacity-0 group-hover/id:opacity-100 text-slate-400 hover:text-blue-600 transition p-0.5"
+                    title="Copy Task ID"
+                 >
+                    {copied ? <Check size={10} className="text-green-500"/> : <Copy size={10}/>}
+                 </button>
+             </div>
+             <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{task.priority}</span>
           </div>
+
           <h4 className="font-semibold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
           
           <div className="flex flex-wrap gap-2 mb-3">
             <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[120px]">{task.pod}</span>
+            {task.status === 'Blocked' && <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-red-100 text-red-600 border-red-200">Blocked</span>}
           </div>
 
           <div className="flex justify-between items-center pt-3 border-t border-slate-50">
@@ -1272,7 +1310,6 @@ function TaskCard({ task, index, onClick }) {
                 ) : <span className="text-[10px] text-slate-400 italic">Unassigned</span>}
             </div>
             
-            {/* Show Count of Child Tasks if any */}
             {task.subtasks?.length > 0 && (
                 <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded">
                     <CheckCircle2 size={12}/> {task.subtasks.filter(s => s.status === 'Done').length}/{task.subtasks.length}

@@ -753,7 +753,7 @@ export default function App() {
     if (token) {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      fetchGlobalData(); // Trigger fetch
+      fetchGlobalData(); 
     } else {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -811,8 +811,6 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
 
-  // Removed local useState for users/teams to avoid shadowing props
-
   const fetchTasks = async () => {
     let endpoint = `${API_URL}/tasks`;
     if (filter === 'my-tasks') endpoint += `?filter=my-tasks`;
@@ -820,11 +818,14 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
     
     try {
         const { data } = await axios.get(endpoint);
-        setTasks(data);
+        // Only show top-level tasks on board
+        const topLevelTasks = data.filter(t => !t.parentTask);
+        setTasks(topLevelTasks);
         
+        // Refresh selected task if open
         if(selectedTask) {
-            const updated = data.find(t => t._id === selectedTask._id);
-            if(updated) setSelectedTask(updated);
+            // Find task in full dataset (including subtasks) requires separate fetch or smart update
+            // For simplicity, we just won't auto-refresh the modal content from here to avoid complexity
         }
     } catch (e) { console.error("Fetch error", e); }
   };
@@ -854,7 +855,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
                {filter === 'my-tasks' ? 'My Tasks' : activeTeam ? activeTeam.name : 'All Tasks'}
            </h1>
            <p className="text-slate-500 text-sm">
-               {activeTeam ? (activeTeam.isPrivate ? 'Private Team Board' : 'Public Team Board') : 'Overview of all work'}
+               {activeTeam ? (activeTeam.isPrivate ? 'Private Team Board' : 'Public Team Board') : 'Overview of all accessible tasks'}
            </p>
         </div>
 
@@ -907,6 +908,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
         </div>
       </DragDropContext>
 
+      {/* CREATE MODAL */}
       {isCreateModalOpen && (
         <CreateTaskModal 
             onClose={() => setIsCreateModalOpen(false)} 
@@ -921,6 +923,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
 
       {isTeamModalOpen && <CreateTeamModal onClose={() => setIsTeamModalOpen(false)} onSuccess={() => { refreshData(); alert("Team Created!"); }} users={users} />}
       
+      {/* DETAIL MODAL */}
       {selectedTask && (
         <TaskDetailModal 
             task={selectedTask} 
@@ -943,6 +946,8 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
 function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtask, onSelectSubtask }) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  
+  // Safe extraction of IDs
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
@@ -1116,6 +1121,147 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   );
 }
 
+// --- CREATE TASK MODAL (Fix Blank Screen) ---
+function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
+  const [loading, setLoading] = useState(false);
+  
+  // Safe extraction of initial Team ID
+  const getInitialTeamId = () => {
+      if(activeTeam && activeTeam._id) return activeTeam._id;
+      if(parentTask) {
+          // Parent task might have team populated (object) or just ID string
+          return parentTask.team?._id || parentTask.team || ''; 
+      }
+      return '';
+  };
+
+  const [formData, setFormData] = useState({
+    title: '', description: '', 
+    status: 'To Do',
+    priority: 'Medium', 
+    teamId: getInitialTeamId(),
+    pod: parentTask ? parentTask.pod : 'Development',
+    assigneeId: '',
+    startDate: new Date().toISOString().split('T')[0], 
+    deadline: '', 
+    files: [],
+    reporterId: currentUser._id,
+    taskId: generateTaskId(),
+    parentTaskId: parentTask ? parentTask._id : null
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); 
+    if(!formData.teamId || !formData.assigneeId || !formData.reporterId || !formData.deadline || !formData.title || !formData.description || !formData.pod) {
+        alert("Please fill all mandatory fields marked with *");
+        return;
+    }
+
+    setLoading(true);
+    const data = new FormData();
+    Object.keys(formData).forEach(key => {
+        if(key === 'files') { for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]); } 
+        else { data.append(key, formData[key]); }
+    });
+    
+    try { 
+        await axios.post(`${API_URL}/tasks`, data, { headers: { 'Content-Type': 'multipart/form-data' } }); 
+        onSuccess(); 
+        onClose(); 
+    } 
+    catch(err) { alert("Failed to create task."); } finally { setLoading(false); }
+  };
+
+  const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+            <h2 className="text-lg font-bold text-slate-800">
+                {parentTask ? `New Subtask for ${parentTask.taskId}` : 'New Task'} 
+                <span className="text-slate-400 font-normal ml-2">{formData.taskId}</span>
+            </h2>
+            <div className="flex gap-4 items-center">
+                <button onClick={handleSubmit} disabled={loading} className="bg-slate-900 text-white px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
+                    {loading && <Loader2 className="animate-spin" size={14} />} Create
+                </button>
+                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+            </div>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
+                 <input className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
+
+                 <div className="mb-6">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><FileText size={14} /> Description <span className="text-red-500">*</span></label>
+                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none" placeholder="Add details..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
+                 </div>
+
+                 <div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><Paperclip size={14} /> Attachments</label>
+                    <div className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 relative">
+                        <span className="text-sm">Click to upload new files</span>
+                        <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFormData({...formData, files: e.target.files})} />
+                    </div>
+                 </div>
+            </div>
+
+            <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                        <option>To Do</option><option>In Progress</option><option>Blocked</option><option>Done</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Priority <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
+                        <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.teamId} onChange={e => setFormData({...formData, teamId: e.target.value})} disabled={!!parentTask}>
+                        <option value="">Select Team</option>
+                        {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.pod} onChange={e => setFormData({...formData, pod: e.target.value})}>
+                        {PODS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
+                        <option value="">Select Assignee</option>
+                        {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter <span className="text-red-500">*</span></label>
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
+                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                    </select>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Timeline <span className="text-red-500">*</span></label>
+                    <input type="date" className="w-full text-sm" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} required />
+                    <input type="date" className="w-full text-sm" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} required />
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- TASK CARD ---
 function TaskCard({ task, index, onClick }) {
   const [copied, setCopied] = useState(false);
@@ -1160,7 +1306,7 @@ function TaskCard({ task, index, onClick }) {
             </div>
             
             {/* Show Count of Child Tasks if any */}
-            {task.subtasks && task.subtasks.length > 0 && (
+            {task.subtasks?.length > 0 && (
                 <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded">
                     <CheckCircle2 size={12}/> {task.subtasks.filter(s => s.status === 'Done').length}/{task.subtasks.length}
                 </div>

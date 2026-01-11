@@ -709,10 +709,11 @@ import {
   Trash2, Plus, LogOut, User as UserIcon, Loader2, 
   Calendar, Paperclip, LayoutGrid, Users, CheckCircle2, 
   Lock, X, Download, FileText, Clock, Edit2, Save, ExternalLink,
-  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check
+  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check, Hexagon
 } from 'lucide-react';
-import logo from './assets/logo.png'; 
 
+// --- CONFIGURATION ---
+// If running locally, change this to "http://localhost:5000/api"
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api'; 
 
 // --- AXIOS CONFIGURATION ---
@@ -727,7 +728,8 @@ axios.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.clear();
-      window.location.href = "/";
+      // Only reload if we aren't already on the login screen to prevent loops
+      if (window.location.pathname !== '/') window.location.href = "/";
     }
     return Promise.reject(error);
   }
@@ -748,14 +750,19 @@ export default function App() {
   // Fetch Data Globally
   const fetchGlobalData = () => {
       if(!token) return;
-      axios.get(`${API_URL}/users`).then(res => setUsers(res.data)).catch(console.error);
-      axios.get(`${API_URL}/teams`).then(res => setTeams(res.data)).catch(console.error);
+      axios.get(`${API_URL}/users`)
+        .then(res => setUsers(res.data || []))
+        .catch(err => console.error("User fetch error:", err));
+      
+      axios.get(`${API_URL}/teams`)
+        .then(res => setTeams(res.data || []))
+        .catch(err => console.error("Team fetch error:", err));
   };
 
   useEffect(() => {
     if (token) {
       localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      if(user) localStorage.setItem('user', JSON.stringify(user));
       fetchGlobalData(); 
     } else {
       localStorage.removeItem('token');
@@ -825,8 +832,8 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
     
     try {
         const { data } = await axios.get(endpoint);
-        // Only show top-level tasks on board
-        const topLevelTasks = data.filter(t => !t.parentTask);
+        // Only show top-level tasks on board (tasks without parents)
+        const topLevelTasks = (data || []).filter(t => !t.parentTask);
         setTasks(topLevelTasks);
         
         // If a task is selected (Detail View Open), refresh it to show new subtasks
@@ -843,14 +850,23 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
     const { draggableId, destination } = result;
+    
+    // Optimistic Update
     const updated = tasks.map(t => t._id === draggableId ? { ...t, status: destination.droppableId } : t);
     setTasks(updated);
-    await axios.put(`${API_URL}/tasks/${draggableId}`, { status: destination.droppableId });
+    
+    // API Call
+    try {
+        await axios.put(`${API_URL}/tasks/${draggableId}`, { status: destination.droppableId });
+    } catch (err) {
+        console.error("Drag update failed", err);
+        fetchTasks(); // Revert on fail
+    }
   };
 
   const filteredTasks = tasks.filter(task => {
     const query = searchQuery.toLowerCase();
-    return task.title.toLowerCase().includes(query) || (task.taskId && task.taskId.toLowerCase().includes(query));
+    return (task.title || "").toLowerCase().includes(query) || (task.taskId || "").toLowerCase().includes(query);
   });
 
   const columns = ['To Do', 'In Progress', 'Blocked', 'Done'];
@@ -950,7 +966,62 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   );
 }
 
-// --- CREATE TASK MODAL (FIXED) ---
+// --- MISSING COMPONENT ADDED: TASK CARD ---
+function TaskCard({ task, index, onClick }) {
+    const getPriorityColor = (p) => {
+        if (p === 'Critical') return 'bg-red-100 text-red-600 border-red-200';
+        if (p === 'High') return 'bg-orange-100 text-orange-600 border-orange-200';
+        if (p === 'Medium') return 'bg-blue-100 text-blue-600 border-blue-200';
+        return 'bg-slate-100 text-slate-500 border-slate-200';
+    };
+
+    return (
+        <Draggable draggableId={task._id} index={index}>
+            {(provided, snapshot) => (
+                <div
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                    {...provided.dragHandleProps}
+                    onClick={onClick}
+                    className={`bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-3 group hover:shadow-md hover:border-slate-300 transition cursor-pointer relative overflow-hidden ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}
+                    style={provided.draggableProps.style}
+                >
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 hover:text-slate-600 transition uppercase tracking-wider">{task.taskId}</span>
+                        {task.subtasks && task.subtasks.length > 0 && (
+                            <span className="flex items-center gap-1 text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                                <LayoutGrid size={10} /> {task.subtasks.length}
+                            </span>
+                        )}
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
+                    
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                             <div className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getPriorityColor(task.priority)}`}>
+                                {task.priority}
+                             </div>
+                             {task.attachments && task.attachments.length > 0 && (
+                                <Paperclip size={12} className="text-slate-400" />
+                             )}
+                        </div>
+                        {task.assignee ? (
+                            <div className="w-6 h-6 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-bold text-slate-900 border border-white shadow-sm" title={task.assignee.username}>
+                                {task.assignee.username.charAt(0).toUpperCase()}
+                            </div>
+                        ) : (
+                            <div className="w-6 h-6 rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-300">
+                                <UserIcon size={12} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </Draggable>
+    );
+}
+
+// --- CREATE TASK MODAL ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
   
@@ -958,13 +1029,12 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
   const getInitialTeamId = () => {
       if (parentTask) {
           // If creating a subtask, inherit parent's team
-          return typeof parentTask.team === 'object' ? parentTask.team._id : parentTask.team; 
+          return typeof parentTask.team === 'object' ? parentTask.team?._id : parentTask.team; 
       }
       if (activeTeam && activeTeam._id) {
-          // If on a specific team board, use that team
           return activeTeam._id;
       }
-      // If no active team (e.g., "All Tasks" view) and no parent, default to first available team or empty
+      // Default to first team or empty
       return teams.length > 0 ? teams[0]._id : '';
   };
 
@@ -979,8 +1049,8 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
     priority: 'Medium', 
     teamId: getInitialTeamId(),
     pod: getInitialPod(),
-    assigneeId: currentUser?._id || '', // Default to current user for assignee? Optional.
-    reporterId: currentUser?._id || '', // Default Reporter to Current User
+    assigneeId: currentUser?._id || '', 
+    reporterId: currentUser?._id || '', 
     startDate: new Date().toISOString().split('T')[0], 
     deadline: new Date().toISOString().split('T')[0], 
     files: [],
@@ -994,7 +1064,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
     const missingFields = [];
     if (!formData.title) missingFields.push("Title");
     if (!formData.description) missingFields.push("Description");
-    if (!formData.teamId) missingFields.push("Team (Create a team first if none exist)");
+    if (!formData.teamId) missingFields.push("Team");
     if (!formData.reporterId) missingFields.push("Reporter");
     if (!formData.startDate) missingFields.push("Start Date");
     if (!formData.deadline) missingFields.push("Due Date");
@@ -1007,8 +1077,11 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
     setLoading(true);
     const data = new FormData();
     Object.keys(formData).forEach(key => {
-        if(key === 'files') { for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]); } 
-        else { data.append(key, formData[key]); }
+        if(key === 'files') { 
+            for(let i=0; i<formData.files.length; i++) data.append('files', formData.files[i]); 
+        } else { 
+            data.append(key, formData[key]); 
+        }
     });
     
     try { 
@@ -1067,7 +1140,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                     </select>
                 </div>
                 
-                {/* TEAM SELECTOR (Mandatory) */}
+                {/* TEAM SELECTOR */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team <span className="text-red-500">*</span></label>
                     <select 
@@ -1097,7 +1170,6 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                     </select>
                 </div>
 
-                {/* REPORTER (Auto-filled but editable) */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
@@ -1182,12 +1254,12 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                  </div>
 
                  <div className="mb-8">
-                     <div className="flex justify-between items-center mb-3">
+                      <div className="flex justify-between items-center mb-3">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><CheckCircle2 size={14} /> Child Tasks</label>
                         <button onClick={onCreateSubtask} className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"><Plus size={12}/> Add Child Task</button>
-                     </div>
-                     <div className="space-y-2">
-                         {task.subtasks && task.subtasks.length > 0 ? task.subtasks.map((sub, idx) => (
+                      </div>
+                      <div className="space-y-2">
+                          {task.subtasks && task.subtasks.length > 0 ? task.subtasks.map((sub, idx) => (
                              <div key={idx} className="flex items-center justify-between p-3 border border-slate-100 rounded-lg bg-slate-50 hover:bg-slate-100 transition group cursor-pointer" onClick={() => onSelectSubtask && onSelectSubtask(sub)}>
                                  <div className="flex items-center gap-3">
                                      <span className="text-xs font-bold text-slate-400">{sub.taskId}</span>
@@ -1199,8 +1271,8 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                                      <ArrowRight size={14} className="text-slate-300 group-hover:text-slate-500"/>
                                  </div>
                              </div>
-                         )) : <div className="text-sm text-slate-400 italic p-4 border border-dashed rounded text-center">No child tasks.</div>}
-                     </div>
+                          )) : <div className="text-sm text-slate-400 italic p-4 border border-dashed rounded text-center">No child tasks.</div>}
+                      </div>
                  </div>
 
                  <div>
@@ -1208,7 +1280,6 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                     {task.attachments?.length > 0 ? (
                         <div className="grid grid-cols-2 gap-4">
                             {task.attachments.map((file, idx) => {
-                                // FORCE HTTPS for PDFs
                                 let safeUrl = file.url;
                                 if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
                                 return (
@@ -1242,15 +1313,15 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline</label>
-                     <div className="mb-2">
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline</label>
+                      <div className="mb-2">
                         <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Start Date</label>
                         <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} required />
-                     </div>
-                     <div className="pt-2 border-t border-slate-100">
+                      </div>
+                      <div className="pt-2 border-t border-slate-100">
                         <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Due Date</label>
                         <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} required />
-                     </div>
+                      </div>
                 </div>
 
                 <div>
@@ -1289,116 +1360,119 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   );
 }
 
-// ... (TaskCard, CreateTeamModal, TeamView, Sidebar, AuthScreen remain unchanged from previous versions) ...
 function CreateTeamModal({ onClose, onSuccess, users }) {
-  const [name, setName] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const toggleMember = (id) => setSelectedMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true);
-    try { await axios.post(`${API_URL}/teams`, { name, isPrivate, members: selectedMembers }); onSuccess(); onClose(); } catch(err) { alert("Failed."); } finally { setLoading(false); }
-  };
+  const toggleMember = (id) => setSelectedMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setLoading(true);
+    try { await axios.post(`${API_URL}/teams`, { name, isPrivate, members: selectedMembers }); onSuccess(); onClose(); } catch(err) { alert("Failed."); } finally { setLoading(false); }
+  };
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6 animate-in zoom-in duration-200">
-         <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-900">Create New Team</h2><button onClick={onClose} className="text-slate-400 hover:text-red-500">✕</button></div>
-         <form onSubmit={handleSubmit} className="space-y-4">
-            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team Name</label><input className="w-full border border-slate-200 rounded-lg p-3 outline-none" placeholder="e.g. Secret Project X" value={name} onChange={e => setName(e.target.value)} required /></div>
-            <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-yellow-400" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} /><div><span className="block text-sm font-bold text-slate-800 flex items-center gap-2"><Lock size={14} /> Private Team?</span><span className="block text-xs text-slate-500">Only selected members see this.</span></div></label>
-            {isPrivate && (
-                <div className="mt-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label>
-                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
-                        {users.map(u => (
-                            <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-200 rounded cursor-pointer transition">
-                                <input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900 w-4 h-4"/>
-                                <span className="text-sm font-medium text-slate-700">{u.username}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            )}
-            <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Team</button></div>
-         </form>
-      </div>
-      
-    </div>
-  );
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6 animate-in zoom-in duration-200">
+         <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-900">Create New Team</h2><button onClick={onClose} className="text-slate-400 hover:text-red-500">✕</button></div>
+         <form onSubmit={handleSubmit} className="space-y-4">
+            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team Name</label><input className="w-full border border-slate-200 rounded-lg p-3 outline-none" placeholder="e.g. Secret Project X" value={name} onChange={e => setName(e.target.value)} required /></div>
+            <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer"><input type="checkbox" className="w-5 h-5 accent-yellow-400" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} /><div><span className="block text-sm font-bold text-slate-800 flex items-center gap-2"><Lock size={14} /> Private Team?</span><span className="block text-xs text-slate-500">Only selected members see this.</span></div></label>
+            {isPrivate && (
+                <div className="mt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Select Members</label>
+                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50">
+                        {users.map(u => (
+                            <label key={u._id} className="flex items-center gap-3 p-2 hover:bg-slate-200 rounded cursor-pointer transition">
+                                <input type="checkbox" checked={selectedMembers.includes(u._id)} onChange={() => toggleMember(u._id)} className="accent-slate-900 w-4 h-4"/>
+                                <span className="text-sm font-medium text-slate-700">{u.username}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+            <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Team</button></div>
+         </form>
+      </div>
+      
+    </div>
+  );
 }
 
 function TeamView({ users }) {
-    return (
-        <div className="p-8 h-full overflow-y-auto">
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Team Members</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {users.map(u => <div key={u._id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition"><div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center text-xl font-bold text-slate-900">{u.username[0].toUpperCase()}</div><div className="overflow-hidden"><h3 className="font-bold text-slate-800 truncate">{u.username}</h3><p className="text-sm text-slate-500 truncate">{u.email}</p><span className="inline-block mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span></div></div>)}
-            </div>
-        </div>
-    );
+    return (
+        <div className="p-8 h-full overflow-y-auto">
+            <h1 className="text-2xl font-bold text-slate-900 mb-6">Team Members</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {users.map(u => <div key={u._id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 hover:shadow-md transition"><div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center text-xl font-bold text-slate-900">{u.username[0].toUpperCase()}</div><div className="overflow-hidden"><h3 className="font-bold text-slate-800 truncate">{u.username}</h3><p className="text-sm text-slate-500 truncate">{u.email}</p><span className="inline-block mt-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Active</span></div></div>)}
+            </div>
+        </div>
+    );
 }
 
 function Sidebar({ user, setToken, activeView, setActiveView, activeTeam, setActiveTeam, teams }) {
-  return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
-      <div className="p-6 flex items-center gap-3 border-b border-slate-100"><img src={logo} alt="Logo" className="w-8 h-8 object-contain" /><span className="text-lg font-black tracking-tighter text-slate-900">BeeBark</span></div>
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-        <div className="mb-4">
-            <button onClick={() => { setActiveView('board'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'board' && !activeTeam ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <LayoutGrid size={18}/> All Tasks
-            </button>
-            <button onClick={() => { setActiveView('my-tasks'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'my-tasks' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <CheckCircle2 size={18}/> My Tasks
-            </button>
-            <button onClick={() => { setActiveView('team-list'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'team-list' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <Users size={18}/> Team Members
-            </button>
-        </div>
-        <div className="mt-6">
-            <div className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Teams</div>
-            {teams.map(team => (
-                <button key={team._id} onClick={() => { setActiveView('board'); setActiveTeam(team); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mb-1 ${activeTeam?._id === team._id ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
-                    {team.isPrivate ? <Lock size={14} className="text-red-400"/> : <Users size={14} className="text-blue-400"/>}
-                    <span className="truncate">{team.name}</span>
-                </button>
-            ))}
-        </div>
-      </nav>
-      <div className="p-4 border-t border-slate-100 bg-slate-50"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 shadow-sm">{user?.username?.[0]?.toUpperCase()}</div><div className="overflow-hidden"><div className="text-sm font-bold truncate text-slate-900">{user?.username}</div><div className="text-xs text-slate-500 truncate">{user?.email}</div></div></div><button onClick={() => setToken(null)} className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-xs font-bold w-full transition-colors p-2 rounded hover:bg-red-50"><LogOut size={14} /> Sign Out</button></div>
-    </aside>
-  );
+  return (
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
+      <div className="p-6 flex items-center gap-3 border-b border-slate-100">
+        {/* REPLACED LOGO IMAGE WITH ICON TO PREVENT CRASH */}
+        <Hexagon className="text-yellow-400 fill-yellow-400" size={32} />
+        <span className="text-lg font-black tracking-tighter text-slate-900">BeeBark</span>
+      </div>
+      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        <div className="mb-4">
+            <button onClick={() => { setActiveView('board'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'board' && !activeTeam ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+                <LayoutGrid size={18}/> All Tasks
+            </button>
+            <button onClick={() => { setActiveView('my-tasks'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'my-tasks' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+                <CheckCircle2 size={18}/> My Tasks
+            </button>
+            <button onClick={() => { setActiveView('team-list'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'team-list' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+                <Users size={18}/> Team Members
+            </button>
+        </div>
+        <div className="mt-6">
+            <div className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Teams</div>
+            {teams.map(team => (
+                <button key={team._id} onClick={() => { setActiveView('board'); setActiveTeam(team); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mb-1 ${activeTeam?._id === team._id ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
+                    {team.isPrivate ? <Lock size={14} className="text-red-400"/> : <Users size={14} className="text-blue-400"/>}
+                    <span className="truncate">{team.name}</span>
+                </button>
+            ))}
+        </div>
+      </nav>
+      <div className="p-4 border-t border-slate-100 bg-slate-50"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 shadow-sm">{user?.username?.[0]?.toUpperCase()}</div><div className="overflow-hidden"><div className="text-sm font-bold truncate text-slate-900">{user?.username}</div><div className="text-xs text-slate-500 truncate">{user?.email}</div></div></div><button onClick={() => setToken(null)} className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-xs font-bold w-full transition-colors p-2 rounded hover:bg-red-50"><LogOut size={14} /> Sign Out</button></div>
+    </aside>
+  );
 }
 
 function AuthScreen({ setToken, setUser }) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ username: '', email: '', password: '' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true); setError('');
-    try {
-      const endpoint = isLogin ? '/login' : '/register';
-      const { data } = await axios.post(`${API_URL}${endpoint}`, formData);
-      if (isLogin) { localStorage.setItem('token', data.token); localStorage.setItem('user', JSON.stringify(data.user)); setToken(data.token); setUser(data.user); } 
-      else { setIsLogin(true); setError("Account created! Please log in."); setFormData({ username: '', email: '', password: '' }); }
-    } catch (err) { setError(err.response?.data?.error || "Connection failed."); } finally { setLoading(false); }
-  };
-  return (
-    <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-md p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
-        <div className="text-center mb-8"><h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1><p className="text-slate-500">Agile project management.</p></div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required /></div>
-           {!isLogin && <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label><input type="email" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required /></div>}
-           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label><input type="password" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required /></div>
-           {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
-           <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2">{loading && <Loader2 className="animate-spin" />}{isLogin ? 'Log In' : 'Join Team'}</button>
-        </form>
-        <div className="text-center mt-6"><button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">{isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}</button></div>
-      </div>
-    </div>
-  );
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({ username: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setLoading(true); setError('');
+    try {
+      const endpoint = isLogin ? '/login' : '/register';
+      const { data } = await axios.post(`${API_URL}${endpoint}`, formData);
+      if (isLogin) { localStorage.setItem('token', data.token); localStorage.setItem('user', JSON.stringify(data.user)); setToken(data.token); setUser(data.user); } 
+      else { setIsLogin(true); setError("Account created! Please log in."); setFormData({ username: '', email: '', password: '' }); }
+    } catch (err) { setError(err.response?.data?.error || "Connection failed."); } finally { setLoading(false); }
+  };
+  return (
+    <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+      <div className="w-full max-w-md p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
+        <div className="text-center mb-8"><h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1><p className="text-slate-500">Agile project management.</p></div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required /></div>
+           {!isLogin && <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label><input type="email" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required /></div>}
+           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label><input type="password" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required /></div>
+           {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
+           <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2">{loading && <Loader2 className="animate-spin" />}{isLogin ? 'Log In' : 'Join Team'}</button>
+        </form>
+        <div className="text-center mt-6"><button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">{isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}</button></div>
+      </div>
+    </div>
+  );
 }

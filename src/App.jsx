@@ -715,6 +715,7 @@ import logo from './assets/logo.png';
 
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api'; 
 
+// --- AXIOS CONFIGURATION ---
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -740,11 +741,11 @@ export default function App() {
   const [activeView, setActiveView] = useState('board'); 
   const [activeTeam, setActiveTeam] = useState(null); 
   
-  // GLOBAL STATE
+  // GLOBAL DATA STATE
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
 
-  // Fetch Globally
+  // Fetch Data Globally
   const fetchGlobalData = () => {
       if(!token) return;
       axios.get(`${API_URL}/users`).then(res => setUsers(res.data)).catch(console.error);
@@ -776,8 +777,26 @@ export default function App() {
         teams={teams} 
       />
       <main className="flex-1 overflow-hidden relative">
-        {activeView === 'board' && <BoardView currentUser={user} activeTeam={activeTeam} filter={activeTeam ? 'team' : 'all'} users={users} teams={teams} refreshData={fetchGlobalData} />}
-        {activeView === 'my-tasks' && <BoardView currentUser={user} activeTeam={null} filter="my-tasks" users={users} teams={teams} refreshData={fetchGlobalData} />}
+        {activeView === 'board' && (
+            <BoardView 
+                currentUser={user} 
+                activeTeam={activeTeam} 
+                filter={activeTeam ? 'team' : 'all'} 
+                users={users} 
+                teams={teams} 
+                refreshData={fetchGlobalData}
+            />
+        )}
+        {activeView === 'my-tasks' && (
+            <BoardView 
+                currentUser={user} 
+                activeTeam={null} 
+                filter="my-tasks" 
+                users={users} 
+                teams={teams} 
+                refreshData={fetchGlobalData}
+            />
+        )}
         {activeView === 'team-list' && <TeamView users={users} />}
       </main>
     </div>
@@ -789,28 +808,36 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   const [tasks, setTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // MODAL STATES
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [parentTaskForSubtask, setParentTaskForSubtask] = useState(null);
-  
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
 
   const fetchTasks = async () => {
     let endpoint = `${API_URL}/tasks`;
-    if (filter === 'my-tasks') endpoint += `?filter=my-tasks`;
-    else if (activeTeam) endpoint += `?teamId=${activeTeam._id}`;
+    // Explicitly handle filters
+    if (filter === 'my-tasks') {
+        endpoint += `?filter=my-tasks`;
+    } else if (activeTeam) {
+        endpoint += `?teamId=${activeTeam._id}`;
+    }
     
     try {
         const { data } = await axios.get(endpoint);
+        // Only show top-level tasks on board
         const topLevelTasks = data.filter(t => !t.parentTask);
         setTasks(topLevelTasks);
         
+        // If a task is selected (Detail View Open), refresh it to show new subtasks
         if(selectedTask) {
-             // Optional: logic to refresh selected task
+             const updatedOpenTask = data.find(t => t._id === selectedTask._id);
+             if (updatedOpenTask) setSelectedTask(updatedOpenTask);
         }
     } catch (e) { console.error("Fetch error", e); }
   };
 
+  // Re-fetch when filter, team, or activeView changes
   useEffect(() => { fetchTasks(); }, [filter, activeTeam]);
 
   const onDragEnd = async (result) => {
@@ -889,6 +916,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
         </div>
       </DragDropContext>
 
+      {/* CREATE MODAL */}
       {isCreateModalOpen && (
         <CreateTaskModal 
             onClose={() => setIsCreateModalOpen(false)} 
@@ -903,6 +931,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
 
       {isTeamModalOpen && <CreateTeamModal onClose={() => setIsTeamModalOpen(false)} onSuccess={() => { refreshData(); alert("Team Created!"); }} users={users} />}
       
+      {/* DETAIL MODAL */}
       {selectedTask && (
         <TaskDetailModal 
             task={selectedTask} 
@@ -921,221 +950,40 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   );
 }
 
-// --- TASK DETAIL MODAL ---
-function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtask, onSelectSubtask }) {
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  
-  const [editForm, setEditForm] = useState({
-     ...task,
-     assigneeId: task.assignee?._id || task.assignee || "",
-     reporterId: task.reporter?._id || task.reporter || "",
-     teamId: task.team?._id || task.team || "",
-     startDate: task.startDate ? task.startDate.split('T')[0] : "",
-     deadline: task.deadline ? task.deadline.split('T')[0] : "",
-  });
-
-  const handleSave = async () => {
-    if (!editForm.assigneeId || !editForm.reporterId || !editForm.startDate || !editForm.deadline || !editForm.teamId || !editForm.pod) {
-        alert("Please fill all mandatory fields.");
-        return;
-    }
-    setLoading(true);
-    try {
-        await axios.put(`${API_URL}/tasks/${task._id}`, editForm);
-        onUpdate();
-        onClose();
-    } catch (err) { alert("Failed to update task"); }
-    finally { setLoading(false); }
-  };
-
-  const handleCopyId = () => {
-      navigator.clipboard.writeText(task.taskId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-  };
-
-  const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 z-[100]">
-      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[85vh] flex flex-col">
-        {/* HEADER */}
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-            <div className="flex items-center gap-3">
-                <button onClick={handleCopyId} className="flex items-center gap-2 bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition" title="Click to Copy ID">
-                    {task.taskId}
-                    {copied ? <Check size={12} className="text-green-600"/> : <Copy size={12}/>}
-                </button>
-                {task.parentTask && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Subtask</span>}
-                <input 
-                    className="font-bold text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent w-96 hover:bg-slate-50 rounded px-1 transition" 
-                    value={editForm.title} 
-                    onChange={e => setEditForm({...editForm, title: e.target.value})} 
-                />
-            </div>
-            <div className="flex gap-4 items-center">
-                <button onClick={handleSave} disabled={loading} className="bg-slate-900 text-white px-5 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
-                    {loading && <Loader2 className="animate-spin" size={14} />} Save
-                </button>
-                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
-            </div>
-        </div>
-
-        {/* BODY */}
-        <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                 <div className="mb-6">
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><FileText size={14} /> Description <span className="text-red-500">*</span></label>
-                    <textarea 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed" 
-                        value={editForm.description} 
-                        onChange={e => setEditForm({...editForm, description: e.target.value})} 
-                    />
-                 </div>
-
-                 {/* SUBTASKS */}
-                 <div className="mb-8">
-                     <div className="flex justify-between items-center mb-3">
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><CheckCircle2 size={14} /> Child Tasks</label>
-                        <button onClick={onCreateSubtask} className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"><Plus size={12}/> Add Child Task</button>
-                     </div>
-                     <div className="space-y-2">
-                         {task.subtasks && task.subtasks.length > 0 ? task.subtasks.map((sub, idx) => (
-                             <div key={idx} className="flex items-center justify-between p-3 border border-slate-100 rounded-lg bg-slate-50 hover:bg-slate-100 transition group cursor-pointer" onClick={() => onSelectSubtask && onSelectSubtask(sub)}>
-                                 <div className="flex items-center gap-3">
-                                     <span className="text-xs font-bold text-slate-400">{sub.taskId}</span>
-                                     <span className="text-sm font-medium text-slate-700">{sub.title}</span>
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                     <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${sub.status === 'Blocked' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-slate-600 border-slate-200'}`}>{sub.status}</span>
-                                     <div className="w-6 h-6 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-bold">{sub.assignee?.username?.[0] || 'U'}</div>
-                                     <ArrowRight size={14} className="text-slate-300 group-hover:text-slate-500"/>
-                                 </div>
-                             </div>
-                         )) : <div className="text-sm text-slate-400 italic p-4 border border-dashed rounded text-center">No child tasks.</div>}
-                     </div>
-                 </div>
-
-                 {/* Attachments */}
-                 <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><Paperclip size={14} /> Attachments</label>
-                    {task.attachments?.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-4">
-                            {task.attachments.map((file, idx) => {
-                                // --- FIX: FORCE HTTPS FOR ATTACHMENTS (SOLVES PDF ERROR) ---
-                                let safeUrl = file.url;
-                                if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
-
-                                return (
-                                    <a key={idx} href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
-                                        <div className="bg-red-50 p-2.5 rounded-lg text-red-500"><FileText size={20}/></div>
-                                        <div className="overflow-hidden"><div className="text-sm font-bold text-slate-700 truncate">{file.name}</div></div>
-                                        <ExternalLink size={14} className="ml-auto text-slate-300 group-hover:text-slate-600"/>
-                                    </a>
-                                );
-                            })}
-                        </div>
-                    ) : <div className="text-sm text-slate-400 italic p-4 border border-dashed border-slate-200 rounded-lg text-center">No attachments found.</div>}
-                 </div>
-            </div>
-
-            {/* RIGHT SIDEBAR */}
-            <div className="w-80 bg-slate-50/80 p-6 overflow-y-auto custom-scrollbar space-y-6 border-l border-slate-100">
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status <span className="text-red-500">*</span></label>
-                        <select className="w-full bg-white border border-slate-200 rounded p-2 text-xs font-bold" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
-                            <option>To Do</option><option>In Progress</option><option>Blocked</option><option>Done</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Priority <span className="text-red-500">*</span></label>
-                        <select className="w-full bg-white border border-slate-200 rounded p-2 text-xs font-bold" value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value})}>
-                            <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline <span className="text-red-500">*</span></label>
-                     <div className="mb-2">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Start Date</label>
-                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} required />
-                     </div>
-                     <div className="pt-2 border-t border-slate-100">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Due Date</label>
-                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} required />
-                     </div>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.teamId} onChange={e => setEditForm({...editForm, teamId: e.target.value})}>
-                        <option value="">Select Team</option>
-                        {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.pod} onChange={e => setEditForm({...editForm, pod: e.target.value})}>
-                        {PODS.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.assigneeId} onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}>
-                        <option value="">Unassigned</option>
-                        {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.reporterId} onChange={e => setEditForm({...editForm, reporterId: e.target.value})}>
-                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
-                    </select>
-                </div>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- CREATE TASK MODAL (Safe & Initialized) ---
+// --- CREATE TASK MODAL (FIXED) ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
   
-  // Safe extraction of Team ID to prevent Blank Screen
+  // SAFE INITIALIZATION OF TEAM ID
   const getInitialTeamId = () => {
-      if(activeTeam && activeTeam._id) return activeTeam._id;
-      if(parentTask) {
-          // If parent team is an object (populated), take _id. If string, use as is.
+      if (parentTask) {
+          // If creating a subtask, inherit parent's team
           return typeof parentTask.team === 'object' ? parentTask.team._id : parentTask.team; 
       }
-      return '';
+      if (activeTeam && activeTeam._id) {
+          // If on a specific team board, use that team
+          return activeTeam._id;
+      }
+      // If no active team (e.g., "All Tasks" view) and no parent, default to first available team or empty
+      return teams.length > 0 ? teams[0]._id : '';
   };
 
   const getInitialPod = () => {
-      if(parentTask) return parentTask.pod;
+      if (parentTask) return parentTask.pod;
       return 'Development'; 
   };
 
-  // --- FIX: Default deadlines to Today so it's not empty ---
   const [formData, setFormData] = useState({
     title: '', description: '', 
     status: 'To Do',
     priority: 'Medium', 
     teamId: getInitialTeamId(),
     pod: getInitialPod(),
-    assigneeId: '',
+    assigneeId: currentUser?._id || '', // Default to current user for assignee? Optional.
+    reporterId: currentUser?._id || '', // Default Reporter to Current User
     startDate: new Date().toISOString().split('T')[0], 
     deadline: new Date().toISOString().split('T')[0], 
     files: [],
-    reporterId: currentUser._id,
     taskId: generateTaskId(),
     parentTaskId: parentTask ? parentTask._id : null
   });
@@ -1143,19 +991,16 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
   const handleSubmit = async (e) => {
     e.preventDefault(); 
     
-    // Debug: Check which field is missing
     const missingFields = [];
     if (!formData.title) missingFields.push("Title");
     if (!formData.description) missingFields.push("Description");
-    if (!formData.teamId) missingFields.push("Team");
-    if (!formData.pod) missingFields.push("Pod");
-    if (!formData.assigneeId) missingFields.push("Assignee");
+    if (!formData.teamId) missingFields.push("Team (Create a team first if none exist)");
     if (!formData.reporterId) missingFields.push("Reporter");
     if (!formData.startDate) missingFields.push("Start Date");
     if (!formData.deadline) missingFields.push("Due Date");
 
     if (missingFields.length > 0) {
-        alert(`Please fill the following fields: ${missingFields.join(', ')}`);
+        alert(`Please fill mandatory fields:\n- ${missingFields.join('\n- ')}`);
         return;
     }
 
@@ -1171,7 +1016,10 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
         onSuccess(); 
         onClose(); 
     } 
-    catch(err) { alert("Failed to create task."); } finally { setLoading(false); }
+    catch(err) { 
+        console.error(err);
+        alert("Failed to create task."); 
+    } finally { setLoading(false); }
   };
 
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
@@ -1218,13 +1066,8 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                         <option>To Do</option><option>In Progress</option><option>Blocked</option><option>Done</option>
                     </select>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Priority <span className="text-red-500">*</span></label>
-                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
-                        <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
-                    </select>
-                </div>
                 
+                {/* TEAM SELECTOR (Mandatory) */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team <span className="text-red-500">*</span></label>
                     <select 
@@ -1232,45 +1075,39 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                         value={formData.teamId} 
                         onChange={e => setFormData({...formData, teamId: e.target.value})} 
                         disabled={!!parentTask}
-                        style={{opacity: !!parentTask ? 0.7 : 1}}
                     >
                         <option value="">Select Team</option>
                         {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
                     </select>
+                    {!formData.teamId && <p className="text-[10px] text-red-500 mt-1">Please create/select a team first.</p>}
                 </div>
 
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod <span className="text-red-500">*</span></label>
-                    <select 
-                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm" 
-                        value={formData.pod} 
-                        onChange={e => setFormData({...formData, pod: e.target.value})}
-                        disabled={!!parentTask}
-                        style={{opacity: !!parentTask ? 0.7 : 1}}
-                    >
+                    <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.pod} onChange={e => setFormData({...formData, pod: e.target.value})} disabled={!!parentTask}>
                         {PODS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee <span className="text-red-500">*</span></label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
-                        <option value="">Select Assignee</option>
+                        <option value="">Unassigned</option>
                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
+
+                {/* REPORTER (Auto-filled but editable) */}
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
                          {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
+
                 <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-2">
                     <label className="block text-xs font-bold text-slate-500 uppercase">Timeline <span className="text-red-500">*</span></label>
-                    <div className="text-[10px] text-slate-400 font-bold">Start Date</div>
-                    <input type="date" className="w-full text-sm border-b pb-1" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} required />
-                    
-                    <div className="text-[10px] text-slate-400 font-bold mt-2">Due Date</div>
+                    <input type="date" className="w-full text-sm" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} required />
                     <input type="date" className="w-full text-sm" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} required />
                 </div>
             </div>
@@ -1280,63 +1117,179 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
   );
 }
 
-// ... (TaskCard, TeamView, Sidebar, AuthScreen, CreateTeamModal components remain exactly as they were in your code) ...
-// (I am not repeating them here to save space, but make sure they are in the final file)
-function TaskCard({ task, index, onClick }) {
-  const [copied, setCopied] = useState(false);
+// --- TASK DETAIL MODAL ---
+function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtask, onSelectSubtask }) {
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editForm, setEditForm] = useState({
+     ...task,
+     assigneeId: task.assignee?._id || task.assignee || "",
+     reporterId: task.reporter?._id || task.reporter || "",
+     teamId: task.team?._id || task.team || "",
+     startDate: task.startDate ? task.startDate.split('T')[0] : "",
+     deadline: task.deadline ? task.deadline.split('T')[0] : "",
+  });
 
-  const handleCopy = (e) => {
-      e.stopPropagation(); 
-      navigator.clipboard.writeText(task.taskId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-  };
+  const handleSave = async () => {
+    if (!editForm.teamId || !editForm.reporterId) {
+        alert("Team and Reporter are required.");
+        return;
+    }
+    setLoading(true);
+    try {
+        await axios.put(`${API_URL}/tasks/${task._id}`, editForm);
+        onUpdate();
+        onClose();
+    } catch (err) { alert("Failed to update task"); }
+    finally { setLoading(false); }
+  };
 
-  return (
-    <Draggable draggableId={task._id} index={index}>
-      {(provided, snapshot) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} onClick={onClick} className={`bg-white p-4 rounded-lg border border-slate-200 mb-3 shadow-sm hover:shadow-md transition group relative cursor-pointer ${snapshot.isDragging ? 'rotate-2 shadow-xl ring-2 ring-yellow-400 z-50' : ''}`}>
-          <div className="flex justify-between items-start mb-2">
-             <div className="flex items-center gap-1 group/id">
-                 <span className="text-[10px] font-bold text-slate-500 group-hover/id:text-blue-600 transition">
-                    {task.taskId}
-                 </span>
-                 <button onClick={handleCopy} className="opacity-0 group-hover/id:opacity-100 text-slate-400 hover:text-blue-600 transition p-0.5" title="Copy Task ID">
-                    {copied ? <Check size={10} className="text-green-500"/> : <Copy size={10}/>}
-                 </button>
-             </div>
-             <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-50 text-red-600 border-red-100' : task.priority === 'Low' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{task.priority}</span>
-          </div>
-          <h4 className="font-semibold text-slate-800 text-sm mb-3 leading-snug">{task.title}</h4>
-          
-          <div className="flex flex-wrap gap-2 mb-3">
-            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[120px]">{task.pod}</span>
-            {task.status === 'Blocked' && <span className="text-[10px] uppercase font-bold px-2 py-1 rounded bg-red-100 text-red-600 border-red-200">Blocked</span>}
-          </div>
+  const handleCopyId = () => {
+      navigator.clipboard.writeText(task.taskId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
 
-          <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-            <div className="flex items-center gap-2">
-                {task.assignee ? (
-                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                         <div className="w-4 h-4 rounded-full bg-yellow-400 flex items-center justify-center text-[8px] font-bold text-slate-900">{task.assignee.username[0].toUpperCase()}</div>
-                         <span className="text-[10px] font-bold text-slate-600 truncate max-w-[80px]">{task.assignee.username}</span>
-                    </div>
-                ) : <span className="text-[10px] text-slate-400 italic">Unassigned</span>}
-            </div>
-            
-            {/* Show Count of Child Tasks if any */}
-            {task.subtasks?.length > 0 && (
-                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded">
-                    <CheckCircle2 size={12}/> {task.subtasks.filter(s => s.status === 'Done').length}/{task.subtasks.length}
-                </div>
-            )}
-          </div>
-        </div>
-      )}
-    </Draggable>
-  );
+  const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 z-[100]">
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[85vh] flex flex-col">
+        {/* HEADER */}
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div className="flex items-center gap-3">
+                <button onClick={handleCopyId} className="flex items-center gap-2 bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition" title="Click to Copy ID">
+                    {task.taskId}
+                    {copied ? <Check size={12} className="text-green-600"/> : <Copy size={12}/>}
+                </button>
+                {task.parentTask && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Subtask</span>}
+                <input className="font-bold text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent w-96 hover:bg-slate-50 rounded px-1 transition" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
+            </div>
+            <div className="flex gap-4 items-center">
+                <button onClick={handleSave} disabled={loading} className="bg-slate-900 text-white px-5 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
+                    {loading && <Loader2 className="animate-spin" size={14} />} Save
+                </button>
+                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+            </div>
+        </div>
+
+        {/* BODY */}
+        <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
+                 <div className="mb-6">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><FileText size={14} /> Description</label>
+                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                 </div>
+
+                 <div className="mb-8">
+                     <div className="flex justify-between items-center mb-3">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><CheckCircle2 size={14} /> Child Tasks</label>
+                        <button onClick={onCreateSubtask} className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"><Plus size={12}/> Add Child Task</button>
+                     </div>
+                     <div className="space-y-2">
+                         {task.subtasks && task.subtasks.length > 0 ? task.subtasks.map((sub, idx) => (
+                             <div key={idx} className="flex items-center justify-between p-3 border border-slate-100 rounded-lg bg-slate-50 hover:bg-slate-100 transition group cursor-pointer" onClick={() => onSelectSubtask && onSelectSubtask(sub)}>
+                                 <div className="flex items-center gap-3">
+                                     <span className="text-xs font-bold text-slate-400">{sub.taskId}</span>
+                                     <span className="text-sm font-medium text-slate-700">{sub.title}</span>
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                     <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${sub.status === 'Blocked' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-white text-slate-600 border-slate-200'}`}>{sub.status}</span>
+                                     <div className="w-6 h-6 rounded-full bg-yellow-400 flex items-center justify-center text-[10px] font-bold">{sub.assignee?.username?.[0] || 'U'}</div>
+                                     <ArrowRight size={14} className="text-slate-300 group-hover:text-slate-500"/>
+                                 </div>
+                             </div>
+                         )) : <div className="text-sm text-slate-400 italic p-4 border border-dashed rounded text-center">No child tasks.</div>}
+                     </div>
+                 </div>
+
+                 <div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><Paperclip size={14} /> Attachments</label>
+                    {task.attachments?.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-4">
+                            {task.attachments.map((file, idx) => {
+                                // FORCE HTTPS for PDFs
+                                let safeUrl = file.url;
+                                if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
+                                return (
+                                    <a key={idx} href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
+                                        <div className="bg-red-50 p-2.5 rounded-lg text-red-500"><FileText size={20}/></div>
+                                        <div className="overflow-hidden"><div className="text-sm font-bold text-slate-700 truncate">{file.name}</div></div>
+                                        <ExternalLink size={14} className="ml-auto text-slate-300 group-hover:text-slate-600"/>
+                                    </a>
+                                );
+                            })}
+                        </div>
+                    ) : <div className="text-sm text-slate-400 italic p-4 border border-dashed border-slate-200 rounded-lg text-center">No attachments found.</div>}
+                 </div>
+            </div>
+
+            {/* RIGHT SIDEBAR */}
+            <div className="w-80 bg-slate-50/80 p-6 overflow-y-auto custom-scrollbar space-y-6 border-l border-slate-100">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>
+                        <select className="w-full bg-white border border-slate-200 rounded p-2 text-xs font-bold" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
+                            <option>To Do</option><option>In Progress</option><option>Blocked</option><option>Done</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Priority</label>
+                        <select className="w-full bg-white border border-slate-200 rounded p-2 text-xs font-bold" value={editForm.priority} onChange={e => setEditForm({...editForm, priority: e.target.value})}>
+                            <option>Low</option><option>Medium</option><option>High</option><option>Critical</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline</label>
+                     <div className="mb-2">
+                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Start Date</label>
+                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} required />
+                     </div>
+                     <div className="pt-2 border-t border-slate-100">
+                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Due Date</label>
+                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} required />
+                     </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Team</label>
+                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.teamId} onChange={e => setEditForm({...editForm, teamId: e.target.value})}>
+                        <option value="">Select Team</option>
+                        {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pod</label>
+                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.pod} onChange={e => setEditForm({...editForm, pod: e.target.value})}>
+                        {PODS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
+                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.assigneeId} onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}>
+                        <option value="">Unassigned</option>
+                        {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter</label>
+                    <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.reporterId} onChange={e => setEditForm({...editForm, reporterId: e.target.value})}>
+                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                    </select>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
+// ... (TaskCard, CreateTeamModal, TeamView, Sidebar, AuthScreen remain unchanged from previous versions) ...
 function CreateTeamModal({ onClose, onSuccess, users }) {
   const [name, setName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -1372,6 +1325,7 @@ function CreateTeamModal({ onClose, onSuccess, users }) {
             <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Team</button></div>
          </form>
       </div>
+      
     </div>
   );
 }

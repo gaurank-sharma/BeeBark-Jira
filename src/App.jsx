@@ -1486,7 +1486,6 @@
 
 //================================================================================================================================//
 
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -1498,9 +1497,8 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
-// Change this to your live backend URL if deployed
 const API_URL = 'https://bee-bark-jira-backend.vercel.app/api'; 
-// const API_URL = 'http://localhost:5000/api'; // Use this for local testing
+// const API_URL = 'http://localhost:5000/api'; // Use for local testing
 
 // --- AXIOS CONFIGURATION ---
 axios.interceptors.request.use((config) => {
@@ -1514,7 +1512,8 @@ axios.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.clear();
-      if (window.location.pathname !== '/') window.location.href = "/";
+      // FIX 4: Use replace() to avoid filling browser history (Login Loop Fix)
+      if (window.location.pathname !== '/') window.location.replace("/");
     }
     return Promise.reject(error);
   }
@@ -1619,6 +1618,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
         const topLevelTasks = (data || []).filter(t => !t.parentTask);
         setTasks(topLevelTasks);
         
+        // Refresh selected task if it's open
         if(selectedTask) {
              const updatedOpenTask = data.find(t => t._id === selectedTask._id);
              if (updatedOpenTask) setSelectedTask(updatedOpenTask);
@@ -1738,7 +1738,16 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
                 setParentTaskForSubtask(selectedTask);
                 setIsCreateModalOpen(true);
             }}
-            onSelectSubtask={(sub) => setSelectedTask(sub)}
+            // FIX 3: Fetch full subtask details to prevent crash ("Removes up" bug)
+            onSelectSubtask={async (sub) => {
+                try {
+                    const subId = sub._id || sub;
+                    const { data } = await axios.get(`${API_URL}/tasks/${subId}`);
+                    setSelectedTask(data);
+                } catch (e) {
+                    console.error("Failed to fetch subtask", e);
+                }
+            }}
         />
       )}
     </div>
@@ -1984,7 +1993,10 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
     }
     setLoading(true);
     try {
-        await axios.put(`${API_URL}/tasks/${task._id}`, editForm);
+        // FIX 2: Exclude 'subtasks' from the payload to avoid overwriting/removing new subtasks on the server
+        const { subtasks, _id, createdAt, updatedAt, ...payload } = editForm;
+        
+        await axios.put(`${API_URL}/tasks/${task._id}`, payload);
         onUpdate();
         onClose();
     } catch (err) { alert("Failed to update task"); }
@@ -1997,13 +2009,9 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
       setTimeout(() => setCopied(false), 2000);
   };
 
+  // FIX 1: Removed logic that replaced Cloudinary URLs. Now uses the raw URL from the DB.
   const getCorrectUrl = (fileUrl) => {
     if (!fileUrl) return '';
-    // Cloudinary specific fix: If PDF is fetched as 'image', it fails. Force 'raw' or ensure correct path.
-    // If it's a PDF, we try to ensure it opens in a way the browser can handle (e.g., raw mode for Cloudinary)
-    if (fileUrl.includes('.pdf') && fileUrl.includes('/image/upload/')) {
-        return fileUrl.replace('/image/upload/', '/raw/upload/');
-    }
     return fileUrl;
   };
 
@@ -2199,10 +2207,16 @@ function TeamView({ users }) {
 function Sidebar({ user, setToken, activeView, setActiveView, activeTeam, setActiveTeam, teams }) {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
-      <div className="p-6 flex items-center gap-3 border-b border-slate-100">
-        <Hexagon className="text-yellow-400 fill-yellow-400" size={32} />
-        <span className="text-lg font-black tracking-tighter text-slate-900">BeeBark</span>
-      </div>
+       <div className="p-3 flex items-center gap-1 border-b border-slate-100">
+    
+    <img 
+        src="/logo.png"   
+        alt="BeeBark Logo" 
+        className="w-12 h-10 object-contain"
+    />
+    
+    <span className="text-2xl font-black tracking-tighter text-slate-900">BeeBark</span>
+</div>
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
         <div className="mb-4">
             <button onClick={() => { setActiveView('board'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'board' && !activeTeam ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>

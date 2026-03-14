@@ -507,11 +507,13 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 
                  <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><Paperclip size={14} /> Attachments</label>
-                    <div className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 relative">
-                        <span className="text-sm">Click to upload new files</span>
-                        <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => setFormData({...formData, files: e.target.files})} />
-                    </div>
-                    {formData.files.length > 0 && <div className="mt-2 text-green-600 font-bold text-xs">{formData.files.length} files selected</div>}
+                    <label htmlFor="task-file-upload" className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition">
+                        <Paperclip size={20} className="mb-2" />
+                        <span className="text-sm font-medium">Click to upload files</span>
+                        <span className="text-xs mt-1">Images, PDFs and more</span>
+                    </label>
+                    <input id="task-file-upload" type="file" multiple className="hidden" onChange={e => setFormData({...formData, files: e.target.files})} />
+                    {formData.files.length > 0 && <div className="mt-2 text-green-600 font-bold text-xs">{formData.files.length} file(s) selected</div>}
                  </div>
             </div>
 

@@ -3,7 +3,7 @@
 
 //================================================================================================================================//
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -410,6 +410,7 @@ function TaskCard({ task, index, onClick }) {
 // --- CREATE TASK MODAL ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef(null);
   
   const getInitialTeamId = () => {
       if (parentTask) {
@@ -507,12 +508,12 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 
                  <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><Paperclip size={14} /> Attachments</label>
-                    <label htmlFor="task-file-upload" className="border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition">
                         <Paperclip size={20} className="mb-2" />
                         <span className="text-sm font-medium">Click to upload files</span>
                         <span className="text-xs mt-1">Images, PDFs and more</span>
-                    </label>
-                    <input id="task-file-upload" type="file" multiple className="hidden" onChange={e => setFormData({...formData, files: e.target.files})} />
+                    </button>
+                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setFormData({...formData, files: e.target.files})} />
                     {formData.files.length > 0 && <div className="mt-2 text-green-600 font-bold text-xs">{formData.files.length} file(s) selected</div>}
                  </div>
             </div>
@@ -577,6 +578,8 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtask, onSelectSubtask }) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [newFiles, setNewFiles] = useState([]);
+  const fileInputRef = useRef(null);
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
@@ -593,10 +596,15 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
     }
     setLoading(true);
     try {
-        // FIX 2: Exclude 'subtasks' from the payload to avoid overwriting/removing new subtasks on the server
-        const { subtasks, _id, createdAt, updatedAt, ...payload } = editForm;
-        
-        await axios.put(`${API_URL}/tasks/${task._id}`, payload);
+        const { subtasks, _id, createdAt, updatedAt, attachments, ...payload } = editForm;
+        if (newFiles.length > 0) {
+            const formData = new FormData();
+            Object.keys(payload).forEach(key => formData.append(key, payload[key] ?? ''));
+            for (let i = 0; i < newFiles.length; i++) formData.append('files', newFiles[i]);
+            await axios.put(`${API_URL}/tasks/${task._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        } else {
+            await axios.put(`${API_URL}/tasks/${task._id}`, payload);
+        }
         onUpdate();
         onClose();
     } catch (err) { alert("Failed to update task"); }
@@ -669,7 +677,18 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                  </div>
 
                  <div>
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><Paperclip size={14} /> Attachments</label>
+                    <div className="flex items-center justify-between mb-3">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><Paperclip size={14} /> Attachments</label>
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition">
+                            <Plus size={13} /> Add Files
+                        </button>
+                        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setNewFiles(Array.from(e.target.files))} />
+                    </div>
+                    {newFiles.length > 0 && (
+                        <div className="mb-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            <Paperclip size={12} /> {newFiles.length} new file(s) — will upload on Save
+                        </div>
+                    )}
                     {task.attachments?.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {task.attachments.map((file, idx) => {

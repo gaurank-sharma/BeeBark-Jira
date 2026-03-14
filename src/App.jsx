@@ -595,13 +595,11 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
     setLoading(true);
     try {
         const { subtasks, _id, createdAt, updatedAt, attachments, ...payload } = editForm;
+        await axios.put(`${API_URL}/tasks/${task._id}`, payload);
         if (newFiles.length > 0) {
             const formData = new FormData();
-            Object.keys(payload).forEach(key => formData.append(key, payload[key] ?? ''));
             for (let i = 0; i < newFiles.length; i++) formData.append('files', newFiles[i]);
-            await axios.put(`${API_URL}/tasks/${task._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        } else {
-            await axios.put(`${API_URL}/tasks/${task._id}`, payload);
+            await axios.post(`${API_URL}/tasks/${task._id}/attachments`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         }
         onUpdate();
         onClose();

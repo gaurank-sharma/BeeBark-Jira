@@ -481,28 +481,28 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[80vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-            <h2 className="text-lg font-bold text-slate-800">
-                {parentTask ? `New Subtask for ${parentTask.taskId}` : 'New Task'} 
-                <span className="text-slate-400 font-normal ml-2">{formData.taskId}</span>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[92vh] sm:h-[85vh] flex flex-col">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+            <h2 className="text-base sm:text-lg font-bold text-slate-800">
+                {parentTask ? `New Subtask for ${parentTask.taskId}` : 'New Task'}
+                <span className="text-slate-400 font-normal ml-2 text-sm">{formData.taskId}</span>
             </h2>
-            <div className="flex gap-4 items-center">
-                <button onClick={handleSubmit} disabled={loading} className="bg-slate-900 text-white px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
+            <div className="flex gap-3 items-center">
+                <button onClick={handleSubmit} disabled={loading} className="bg-slate-900 text-white px-4 sm:px-6 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
                     {loading && <Loader2 className="animate-spin" size={14} />} Create
                 </button>
-                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={22} /></button>
             </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
-                 <input className="w-full text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <div className="flex-1 p-4 sm:p-8 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
+                 <input className="w-full text-2xl sm:text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
 
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><FileText size={14} /> Description <span className="text-red-500">*</span></label>
-                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none" placeholder="Add details..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
+                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-32 sm:h-40 outline-none" placeholder="Add details..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
                  </div>
 
                  <div>
@@ -515,7 +515,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
                  </div>
             </div>
 
-            <div className="w-80 bg-slate-50 p-6 overflow-y-auto custom-scrollbar space-y-6">
+            <div className="w-full md:w-80 bg-slate-50 p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-4 sm:space-y-6">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>

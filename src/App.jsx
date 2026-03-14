@@ -249,37 +249,37 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   const columns = ['To Do', 'In Progress', 'Blocked', 'Done'];
 
   return (
-    <div className="h-full flex flex-col p-8 overflow-x-auto">
-      <header className="flex justify-between items-center mb-6">
-        <div>
-           <h1 className="text-2xl font-bold text-slate-900">
-               {filter === 'my-tasks' ? 'My Tasks' : activeTeam ? activeTeam.name : 'All Tasks'}
-           </h1>
-           <p className="text-slate-500 text-sm">
-               {activeTeam ? (activeTeam.isPrivate ? 'Private Team Board' : 'Public Team Board') : 'Overview of all accessible tasks'}
-           </p>
+    <div className="h-full flex flex-col p-4 md:p-8 overflow-x-auto">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center mb-6">
+        <div className="shrink-0">
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900">
+            {filter === 'my-tasks' ? 'My Tasks' : activeTeam ? activeTeam.name : 'All Tasks'}
+          </h1>
+          <p className="text-slate-500 text-sm">
+            {activeTeam ? (activeTeam.isPrivate ? 'Private Team Board' : 'Public Team Board') : 'Overview of all accessible tasks'}
+          </p>
         </div>
 
-        <div className="flex-1 max-w-md mx-6">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                    type="text" 
-                    placeholder="Search by Title or Ticket ID..." 
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-yellow-400 outline-none"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
-            </div>
+        <div className="w-full md:flex-1 md:mx-6 md:max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search by Title or Ticket ID..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-yellow-400 outline-none"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="flex gap-3">
-            <button onClick={() => setIsTeamModalOpen(true)} className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm">
-              <Users size={18} /> New Team
-            </button>
-            <button onClick={() => { setParentTaskForSubtask(null); setIsCreateModalOpen(true); }} className="bg-slate-900 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg">
-              <Plus size={18} /> Create Task
-            </button>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => setIsTeamModalOpen(true)} className="bg-white border border-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm">
+            <Users size={16} /> <span className="hidden sm:inline">New Team</span>
+          </button>
+          <button onClick={() => { setParentTaskForSubtask(null); setIsCreateModalOpen(true); }} className="bg-slate-900 text-white px-3 md:px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg text-sm">
+            <Plus size={16} /> <span className="hidden sm:inline">Create Task</span>
+          </button>
         </div>
       </header>
 
@@ -616,29 +616,29 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 z-[100]">
-      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 z-[100]">
+      <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[92vh] sm:h-[85vh] flex flex-col">
         {/* HEADER */}
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-            <div className="flex items-center gap-3">
-                <button onClick={handleCopyId} className="flex items-center gap-2 bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition" title="Click to Copy ID">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex justify-between items-center bg-white gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+                <button onClick={handleCopyId} className="flex-shrink-0 flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-1 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider hover:bg-slate-200 transition" title="Click to Copy ID">
                     {task.taskId}
                     {copied ? <Check size={12} className="text-green-600"/> : <Copy size={12}/>}
                 </button>
-                {task.parentTask && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Subtask</span>}
-                <input className="font-bold text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent w-96 hover:bg-slate-50 rounded px-1 transition" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
+                {task.parentTask && <span className="flex-shrink-0 text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Subtask</span>}
+                <input className="font-bold text-sm sm:text-lg text-slate-800 placeholder:text-slate-300 outline-none bg-transparent min-w-0 w-full hover:bg-slate-50 rounded px-1 transition" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
             </div>
-            <div className="flex gap-4 items-center">
-                <button onClick={handleSave} disabled={loading} className="bg-slate-900 text-white px-5 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
+            <div className="flex gap-2 sm:gap-4 items-center flex-shrink-0">
+                <button onClick={handleSave} disabled={loading} className="bg-slate-900 text-white px-3 sm:px-5 py-2 rounded hover:bg-slate-800 transition text-sm font-bold flex items-center gap-2">
                     {loading && <Loader2 className="animate-spin" size={14} />} Save
                 </button>
-                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={24} /></button>
+                <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition"><X size={22} /></button>
             </div>
         </div>
 
         {/* BODY */}
-        <div className="flex flex-1 overflow-hidden">
-            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar border-r border-slate-100">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <div className="flex-1 p-4 sm:p-8 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><FileText size={14} /> Description</label>
                     <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
@@ -669,15 +669,25 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                  <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><Paperclip size={14} /> Attachments</label>
                     {task.attachments?.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {task.attachments.map((file, idx) => {
                                 let safeUrl = getCorrectUrl(file.url);
                                 if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
+                                const isPdf = file.name?.toLowerCase().endsWith('.pdf') || file.format === 'application/pdf';
+                                const isImage = file.format?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name || '');
+                                const viewUrl = isPdf ? `https://docs.google.com/viewer?url=${encodeURIComponent(safeUrl)}` : safeUrl;
                                 return (
-                                    <a key={idx} href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
-                                        <div className="bg-red-50 p-2.5 rounded-lg text-red-500"><FileText size={20}/></div>
-                                        <div className="overflow-hidden"><div className="text-sm font-bold text-slate-700 truncate">{file.name}</div></div>
-                                        <ExternalLink size={14} className="ml-auto text-slate-300 group-hover:text-slate-600"/>
+                                    <a key={idx} href={viewUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
+                                        {isImage ? (
+                                            <img src={safeUrl} alt={file.name} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+                                        ) : (
+                                            <div className={`flex-shrink-0 p-2.5 rounded-lg ${isPdf ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-500'}`}><FileText size={20}/></div>
+                                        )}
+                                        <div className="overflow-hidden flex-1">
+                                            <div className="text-sm font-bold text-slate-700 truncate">{file.name}</div>
+                                            {isPdf && <div className="text-xs text-slate-400">PDF — click to view</div>}
+                                        </div>
+                                        <ExternalLink size={14} className="flex-shrink-0 ml-auto text-slate-300 group-hover:text-slate-600"/>
                                     </a>
                                 );
                             })}
@@ -687,7 +697,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
             </div>
 
             {/* RIGHT SIDEBAR */}
-            <div className="w-80 bg-slate-50/80 p-6 overflow-y-auto custom-scrollbar space-y-6 border-l border-slate-100">
+            <div className="w-full md:w-80 bg-slate-50/80 p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-6 border-t md:border-t-0 md:border-l border-slate-100">
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>

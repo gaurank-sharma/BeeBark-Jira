@@ -651,8 +651,8 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
         </div>
 
         {/* BODY */}
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-            <div className="flex-1 p-4 sm:p-8 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+            <div className="flex-1 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><FileText size={14} /> Description</label>
                     <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
@@ -686,7 +686,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                         <button type="button" onClick={() => addFilesRef.current?.click()} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition cursor-pointer">
                             <Plus size={13} /> Add Files
                         </button>
-                        <input ref={addFilesRef} type="file" multiple className="hidden" onChange={e => setNewFiles(Array.from(e.target.files))} />
+                        <input ref={addFilesRef} type="file" multiple className="hidden" onChange={e => setNewFiles(prev => [...prev, ...Array.from(e.target.files)])} />
                     </div>
                     {newFiles.length > 0 && (
                         <div className="mb-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
@@ -700,7 +700,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                                 if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
                                 const isPdf = file.name?.toLowerCase().endsWith('.pdf') || file.format === 'application/pdf';
                                 const isImage = file.format?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name || '');
-                                const viewUrl = isPdf ? `https://docs.google.com/viewer?url=${encodeURIComponent(safeUrl)}` : safeUrl;
+                                const viewUrl = safeUrl;
                                 return (
                                     <a key={idx} href={viewUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
                                         {isImage ? (
@@ -722,7 +722,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
             </div>
 
             {/* RIGHT SIDEBAR */}
-            <div className="w-full md:w-80 bg-slate-50/80 p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-6 border-t md:border-t-0 md:border-l border-slate-100">
+            <div className="w-full md:w-72 bg-slate-50/80 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar space-y-4 border-t md:border-t-0 md:border-l border-slate-100">
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>

@@ -3,7 +3,7 @@
 
 //================================================================================================================================//
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -408,8 +408,15 @@ function TaskCard({ task, index, onClick }) {
 }
 
 // --- CREATE TASK MODAL ---
-function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
+function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState(propUsers || []);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (propUsers && propUsers.length > 0) { setUsers(propUsers); return; }
+    axios.get(`${API_URL}/users`).then(r => setUsers(r.data || [])).catch(() => {});
+  }, [propUsers]);
   
   const getInitialTeamId = () => {
       if (parentTask) {
@@ -496,9 +503,9 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
             </div>
         </div>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-            <div className="flex-1 p-4 sm:p-8 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
-                 <input className="w-full text-2xl sm:text-4xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+            <div className="flex-1 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
+                 <input className="w-full text-2xl sm:text-3xl font-bold text-slate-800 placeholder:text-slate-300 outline-none mb-6 bg-transparent" placeholder="Issue Title *" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus required />
 
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><FileText size={14} /> Description <span className="text-red-500">*</span></label>
@@ -507,17 +514,17 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 
                  <div>
                     <p className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><Paperclip size={14} /> Attachments</p>
-                    <label className="w-full border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-slate-400 transition cursor-pointer">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-slate-400 transition cursor-pointer">
                         <Paperclip size={20} className="mb-2" />
                         <span className="text-sm font-medium">Click to upload files</span>
                         <span className="text-xs mt-1">Images, PDFs and more</span>
-                        <input type="file" multiple style={{ display: 'none' }} onChange={e => setFormData({...formData, files: e.target.files})} />
-                    </label>
+                    </button>
+                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setFormData({...formData, files: e.target.files})} />
                     {formData.files.length > 0 && <div className="mt-2 text-green-600 font-bold text-xs">{formData.files.length} file(s) selected</div>}
                  </div>
             </div>
 
-            <div className="w-full md:w-80 bg-slate-50 p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-4 sm:space-y-6">
+            <div className="w-full md:w-72 bg-slate-50 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar space-y-4 border-t md:border-t-0">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Status <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
@@ -578,6 +585,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [newFiles, setNewFiles] = useState([]);
+  const addFilesRef = useRef(null);
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
@@ -675,10 +683,10 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                  <div>
                     <div className="flex items-center justify-between mb-3">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><Paperclip size={14} /> Attachments</label>
-                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition cursor-pointer">
+                        <button type="button" onClick={() => addFilesRef.current?.click()} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition cursor-pointer">
                             <Plus size={13} /> Add Files
-                            <input type="file" multiple style={{ display: 'none' }} onChange={e => setNewFiles(Array.from(e.target.files))} />
-                        </label>
+                        </button>
+                        <input ref={addFilesRef} type="file" multiple className="hidden" onChange={e => setNewFiles(Array.from(e.target.files))} />
                     </div>
                     {newFiles.length > 0 && (
                         <div className="mb-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">

@@ -6,11 +6,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { 
-  Trash2, Plus, LogOut, User as UserIcon, Loader2, 
-  Calendar, Paperclip, LayoutGrid, Users, CheckCircle2, 
+import {
+  Trash2, Plus, LogOut, User as UserIcon, Loader2,
+  Calendar, Paperclip, LayoutGrid, Users, CheckCircle2,
   Lock, X, Download, FileText, Clock, Edit2, Save, ExternalLink,
-  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check, Hexagon
+  Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check, Hexagon,
+  Eye, EyeOff, Menu
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -40,9 +41,10 @@ const generateTaskId = () => `BB-${Math.floor(1000 + Math.random() * 9000)}`;
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
-  const [activeView, setActiveView] = useState('board'); 
-  const [activeTeam, setActiveTeam] = useState(null); 
-  
+  const [activeView, setActiveView] = useState('board');
+  const [activeTeam, setActiveTeam] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // GLOBAL DATA STATE
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -73,38 +75,53 @@ export default function App() {
   if (!token) return <AuthScreen setToken={setToken} setUser={setUser} />;
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
-      <Sidebar 
-        user={user} 
-        setToken={setToken} 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
+    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+      <Sidebar
+        user={user}
+        setToken={setToken}
+        activeView={activeView}
+        setActiveView={setActiveView}
         activeTeam={activeTeam}
         setActiveTeam={setActiveTeam}
-        teams={teams} 
+        teams={teams}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
-      <main className="flex-1 overflow-hidden relative">
-        {activeView === 'board' && (
-            <BoardView 
-                currentUser={user} 
-                activeTeam={activeTeam} 
-                filter={activeTeam ? 'team' : 'all'} 
-                users={users} 
-                teams={teams} 
-                refreshData={fetchGlobalData}
+      <main className="flex-1 overflow-hidden relative flex flex-col">
+        {/* Mobile top bar */}
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200 shadow-sm">
+          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-slate-100 transition">
+            <Menu size={20} className="text-slate-700" />
+          </button>
+          <span className="font-black text-slate-900 text-lg">BeeBark</span>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          {activeView === 'board' && (
+            <BoardView
+              currentUser={user}
+              activeTeam={activeTeam}
+              filter={activeTeam ? 'team' : 'all'}
+              users={users}
+              teams={teams}
+              refreshData={fetchGlobalData}
             />
-        )}
-        {activeView === 'my-tasks' && (
-            <BoardView 
-                currentUser={user} 
-                activeTeam={null} 
-                filter="my-tasks" 
-                users={users} 
-                teams={teams} 
-                refreshData={fetchGlobalData}
+          )}
+          {activeView === 'my-tasks' && (
+            <BoardView
+              currentUser={user}
+              activeTeam={null}
+              filter="my-tasks"
+              users={users}
+              teams={teams}
+              refreshData={fetchGlobalData}
             />
-        )}
-        {activeView === 'team-list' && <TeamView users={users} />}
+          )}
+          {activeView === 'team-list' && <TeamView users={users} />}
+        </div>
       </main>
     </div>
   );
@@ -720,72 +737,192 @@ function TeamView({ users }) {
     );
 }
 
-function Sidebar({ user, setToken, activeView, setActiveView, activeTeam, setActiveTeam, teams }) {
+function Sidebar({ user, setToken, activeView, setActiveView, activeTeam, setActiveTeam, teams, isOpen, onClose }) {
+  const handleNav = (view, team = null) => {
+    setActiveView(view);
+    setActiveTeam(team);
+    onClose();
+  };
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
-       <div className="p-3 flex items-center gap-1 border-b border-slate-100">
-    
-    <img 
-        src="/logo.png"   
-        alt="BeeBark Logo" 
-        className="w-12 h-10 object-contain"
-    />
-    
-    <span className="text-2xl font-black tracking-tighter text-slate-900">BeeBark</span>
-</div>
+    <aside className={`
+      fixed md:static inset-y-0 left-0 z-40
+      w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl
+      transform transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+    `}>
+      <div className="p-3 flex items-center gap-1 border-b border-slate-100">
+        <img src="/logo.png" alt="BeeBark Logo" className="w-12 h-10 object-contain" />
+        <span className="text-2xl font-black tracking-tighter text-slate-900">BeeBark</span>
+        <button onClick={onClose} className="ml-auto md:hidden p-1.5 rounded-lg hover:bg-slate-100 transition">
+          <X size={18} className="text-slate-500" />
+        </button>
+      </div>
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
         <div className="mb-4">
-            <button onClick={() => { setActiveView('board'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'board' && !activeTeam ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <LayoutGrid size={18}/> All Tasks
-            </button>
-            <button onClick={() => { setActiveView('my-tasks'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'my-tasks' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <CheckCircle2 size={18}/> My Tasks
-            </button>
-            <button onClick={() => { setActiveView('team-list'); setActiveTeam(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'team-list' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
-                <Users size={18}/> Team Members
-            </button>
+          <button onClick={() => handleNav('board', null)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'board' && !activeTeam ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <LayoutGrid size={18} /> All Tasks
+          </button>
+          <button onClick={() => handleNav('my-tasks', null)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'my-tasks' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <CheckCircle2 size={18} /> My Tasks
+          </button>
+          <button onClick={() => handleNav('team-list', null)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeView === 'team-list' ? 'bg-yellow-50 text-slate-900 shadow-sm ring-1 ring-yellow-400' : 'text-slate-500 hover:bg-slate-50'}`}>
+            <Users size={18} /> Team Members
+          </button>
         </div>
         <div className="mt-6">
-            <div className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Teams</div>
-            {teams.map(team => (
-                <button key={team._id} onClick={() => { setActiveView('board'); setActiveTeam(team); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mb-1 ${activeTeam?._id === team._id ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
-                    {team.isPrivate ? <Lock size={14} className="text-red-400"/> : <Users size={14} className="text-blue-400"/>}
-                    <span className="truncate">{team.name}</span>
-                </button>
-            ))}
+          <div className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Teams</div>
+          {teams.map(team => (
+            <button key={team._id} onClick={() => handleNav('board', team)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all mb-1 ${activeTeam?._id === team._id ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
+              {team.isPrivate ? <Lock size={14} className="text-red-400" /> : <Users size={14} className="text-blue-400" />}
+              <span className="truncate">{team.name}</span>
+            </button>
+          ))}
         </div>
       </nav>
-      <div className="p-4 border-t border-slate-100 bg-slate-50"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 shadow-sm">{user?.username?.[0]?.toUpperCase()}</div><div className="overflow-hidden"><div className="text-sm font-bold truncate text-slate-900">{user?.username}</div><div className="text-xs text-slate-500 truncate">{user?.email}</div></div></div><button onClick={() => setToken(null)} className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-xs font-bold w-full transition-colors p-2 rounded hover:bg-red-50"><LogOut size={14} /> Sign Out</button></div>
+      <div className="p-4 border-t border-slate-100 bg-slate-50">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center font-bold text-slate-900 shadow-sm">{user?.username?.[0]?.toUpperCase()}</div>
+          <div className="overflow-hidden">
+            <div className="text-sm font-bold truncate text-slate-900">{user?.username}</div>
+            <div className="text-xs text-slate-500 truncate">{user?.email}</div>
+          </div>
+        </div>
+        <button onClick={() => setToken(null)} className="flex items-center gap-2 text-slate-500 hover:text-red-600 text-xs font-bold w-full transition-colors p-2 rounded hover:bg-red-50">
+          <LogOut size={14} /> Sign Out
+        </button>
+      </div>
     </aside>
   );
 }
 
 function AuthScreen({ setToken, setUser }) {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+
   const handleSubmit = async (e) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
       const endpoint = isLogin ? '/login' : '/register';
       const { data } = await axios.post(`${API_URL}${endpoint}`, formData);
-      if (isLogin) { localStorage.setItem('token', data.token); localStorage.setItem('user', JSON.stringify(data.user)); setToken(data.token); setUser(data.user); } 
-      else { setIsLogin(true); setError("Account created! Please log in."); setFormData({ username: '', email: '', password: '' }); }
+      if (isLogin) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setToken(data.token);
+        setUser(data.user);
+      } else {
+        setIsLogin(true);
+        setError("Account created! Please log in.");
+        setFormData({ username: '', email: '', password: '' });
+      }
     } catch (err) { setError(err.response?.data?.error || "Connection failed."); } finally { setLoading(false); }
   };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault(); setLoading(true); setError('');
+    try {
+      await axios.post(`${API_URL}/forgot-password`, { email: forgotEmail });
+      setError("Password reset link sent! Check your email.");
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to send reset email.");
+    } finally { setLoading(false); }
+  };
+
+  if (isForgotPassword) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-md p-8 sm:p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1>
+            <p className="text-slate-500">Reset your password</p>
+          </div>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
+              <input
+                type="email"
+                className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
+                value={forgotEmail}
+                onChange={e => setForgotEmail(e.target.value)}
+                placeholder="Enter your registered email"
+                required
+              />
+            </div>
+            {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('sent') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
+            <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg flex justify-center items-center gap-2">
+              {loading && <Loader2 className="animate-spin" size={18} />} Send Reset Link
+            </button>
+          </form>
+          <div className="text-center mt-6">
+            <button onClick={() => { setIsForgotPassword(false); setError(''); }} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">
+              Back to Log In
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-md p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
-        <div className="text-center mb-8"><h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1><p className="text-slate-500">Agile project management.</p></div>
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-md p-8 sm:p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1>
+          <p className="text-slate-500">Agile project management.</p>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label><input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required /></div>
-           {!isLogin && <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label><input type="email" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required /></div>}
-           <div><label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label><input type="password" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required /></div>
-           {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
-           <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2">{loading && <Loader2 className="animate-spin" />}{isLogin ? 'Log In' : 'Join Team'}</button>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username</label>
+            <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+          </div>
+          {!isLogin && (
+            <div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email</label>
+              <input type="email" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="w-full bg-slate-50 border border-slate-200 p-3 pr-12 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
+                value={formData.password}
+                onChange={e => setFormData({...formData, password: e.target.value})}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+          {isLogin && (
+            <div className="text-right">
+              <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); }} className="text-xs font-bold text-slate-400 hover:text-slate-900 transition">
+                Forgot Password?
+              </button>
+            </div>
+          )}
+          {error && <div className={`text-center text-sm p-2 rounded-lg font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{error}</div>}
+          <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4 flex justify-center items-center gap-2">
+            {loading && <Loader2 className="animate-spin" size={18} />}
+            {isLogin ? 'Log In' : 'Join Team'}
+          </button>
         </form>
-        <div className="text-center mt-6"><button onClick={() => setIsLogin(!isLogin)} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">{isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}</button></div>
+        <div className="text-center mt-6">
+          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="text-sm font-bold text-slate-400 hover:text-slate-900 transition">
+            {isLogin ? "Need an account? Sign Up" : "Have an account? Log In"}
+          </button>
+        </div>
       </div>
     </div>
   );

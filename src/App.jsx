@@ -38,6 +38,70 @@ axios.interceptors.response.use(
 
 const generateTaskId = () => `BB-${Math.floor(1000 + Math.random() * 9000)}`;
 
+function ResetPasswordScreen() {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const resetToken = new URLSearchParams(window.location.search).get('reset');
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    if (password !== confirm) return setMsg('Passwords do not match.');
+    setLoading(true); setMsg('');
+    try {
+      await axios.post(`${API_URL}/reset-password`, { token: resetToken, newPassword: password });
+      setMsg('Password reset! Redirecting to login...');
+      setTimeout(() => window.location.replace('/'), 2000);
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Reset failed. Link may have expired.');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-md p-8 sm:p-10 bg-white rounded-3xl shadow-2xl border border-slate-100">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-slate-900 mb-2">BeeBark</h1>
+          <p className="text-slate-500">Set your new password</p>
+        </div>
+        <form onSubmit={handleReset} className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">New Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="w-full bg-slate-50 border border-slate-200 p-3 pr-12 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required minLength={6}
+              />
+              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition">
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Confirm Password</label>
+            <input
+              type="password"
+              className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 transition"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              required
+            />
+          </div>
+          {msg && <div className={`text-center text-sm p-2 rounded-lg font-medium ${msg.includes('reset!') ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'}`}>{msg}</div>}
+          <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition shadow-lg flex justify-center items-center gap-2">
+            {loading && <Loader2 className="animate-spin" size={18} />} Reset Password
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
@@ -72,6 +136,7 @@ export default function App() {
     }
   }, [token, user]);
 
+  if (new URLSearchParams(window.location.search).get('reset')) return <ResetPasswordScreen />;
   if (!token) return <AuthScreen setToken={setToken} setUser={setUser} />;
 
   return (

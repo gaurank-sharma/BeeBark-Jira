@@ -3,7 +3,7 @@
 
 //================================================================================================================================//
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -410,7 +410,6 @@ function TaskCard({ task, index, onClick }) {
 // --- CREATE TASK MODAL ---
 function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, activeTeam, parentTask }) {
   const [loading, setLoading] = useState(false);
-  const fileInputRef = useRef(null);
   
   const getInitialTeamId = () => {
       if (parentTask) {
@@ -508,12 +507,17 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users, teams, active
 
                  <div>
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><Paperclip size={14} /> Attachments</label>
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition">
-                        <Paperclip size={20} className="mb-2" />
-                        <span className="text-sm font-medium">Click to upload files</span>
-                        <span className="text-xs mt-1">Images, PDFs and more</span>
-                    </button>
-                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setFormData({...formData, files: e.target.files})} />
+                    <div className="relative w-full border border-dashed border-slate-300 rounded-lg p-6 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-slate-400 transition cursor-pointer">
+                        <Paperclip size={20} className="mb-2 pointer-events-none" />
+                        <span className="text-sm font-medium pointer-events-none">Click to upload files</span>
+                        <span className="text-xs mt-1 pointer-events-none">Images, PDFs and more</span>
+                        <input
+                            type="file"
+                            multiple
+                            onChange={e => setFormData({...formData, files: e.target.files})}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                        />
+                    </div>
                     {formData.files.length > 0 && <div className="mt-2 text-green-600 font-bold text-xs">{formData.files.length} file(s) selected</div>}
                  </div>
             </div>
@@ -579,7 +583,6 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [newFiles, setNewFiles] = useState([]);
-  const fileInputRef = useRef(null);
   const [editForm, setEditForm] = useState({
      ...task,
      assigneeId: task.assignee?._id || task.assignee || "",
@@ -679,10 +682,17 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                  <div>
                     <div className="flex items-center justify-between mb-3">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase"><Paperclip size={14} /> Attachments</label>
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition">
-                            <Plus size={13} /> Add Files
-                        </button>
-                        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setNewFiles(Array.from(e.target.files))} />
+                        <div className="relative">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition cursor-pointer pointer-events-none">
+                                <Plus size={13} /> Add Files
+                            </div>
+                            <input
+                                type="file"
+                                multiple
+                                onChange={e => setNewFiles(Array.from(e.target.files))}
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                            />
+                        </div>
                     </div>
                     {newFiles.length > 0 && (
                         <div className="mb-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">

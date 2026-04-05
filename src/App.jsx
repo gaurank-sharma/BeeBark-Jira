@@ -494,6 +494,11 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
 
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
 
+  const selectedTeam = teams.find(t => t._id === formData.teamId);
+  const teamMembers = selectedTeam
+    ? users.filter(u => selectedTeam.members.some(m => (m._id || m).toString() === u._id.toString()))
+    : users;
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-2 sm:p-4">
       <div className="bg-white w-full max-w-5xl rounded-lg shadow-2xl overflow-hidden animate-in zoom-in duration-200 h-[92vh] sm:h-[85vh] flex flex-col">
@@ -564,7 +569,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.assigneeId} onChange={e => setFormData({...formData, assigneeId: e.target.value})}>
                         <option value="">Unassigned</option>
-                        {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        {teamMembers.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
 
@@ -635,6 +640,11 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
   };
 
   const PODS = ["Development", "Design Pod", "Marketing Pod", "Social Media & Community", "Sales / Partnerships", "Operations & Support"];
+
+  const selectedTeam = teams.find(t => t._id === editForm.teamId);
+  const teamMembers = selectedTeam
+    ? users.filter(u => selectedTeam.members.some(m => (m._id || m).toString() === u._id.toString()))
+    : users;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 z-[100]">
@@ -785,14 +795,14 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Assignee</label>
                     <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.assigneeId} onChange={e => setEditForm({...editForm, assigneeId: e.target.value})}>
                         <option value="">Unassigned</option>
-                        {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        {teamMembers.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
 
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter</label>
                     <select className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium" value={editForm.reporterId} onChange={e => setEditForm({...editForm, reporterId: e.target.value})}>
-                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        {teamMembers.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
             </div>

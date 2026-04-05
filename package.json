@@ -12,6 +12,9 @@
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
     "@heroicons/react": "^2.2.0",
+    "@tiptap/extension-placeholder": "^3.22.2",
+    "@tiptap/react": "^3.22.2",
+    "@tiptap/starter-kit": "^3.22.2",
     "axios": "^1.13.2",
     "emailjs-com": "^3.2.0",
     "framer-motion": "^12.4.2",

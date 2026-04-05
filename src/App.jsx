@@ -6,12 +6,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
 import {
   Trash2, Plus, LogOut, User as UserIcon, Loader2,
   Calendar, Paperclip, LayoutGrid, Users, CheckCircle2,
   Lock, X, Download, FileText, Clock, Edit2, Save, ExternalLink,
   Search, AlertCircle, ChevronDown, CheckSquare, Square, ArrowRight, Copy, Check, Hexagon,
-  Eye, EyeOff, Menu
+  Eye, EyeOff, Menu, Bold, Italic, List, ListOrdered, Heading1, Heading2, Quote
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -37,6 +40,60 @@ axios.interceptors.response.use(
 );
 
 const generateTaskId = () => `BB-${Math.floor(1000 + Math.random() * 9000)}`;
+
+// --- RICH TEXT EDITOR ---
+function RichTextEditor({ value, onChange, placeholder = 'Add details...' }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder }),
+    ],
+    content: value || '',
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+  });
+
+  // Sync external value changes (e.g. when task changes)
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value || '', false);
+    }
+  }, [value]);
+
+  if (!editor) return null;
+
+  const ToolbarBtn = ({ onClick, active, title, children }) => (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); onClick(); }}
+      title={title}
+      className={`p-1.5 rounded transition ${active ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-slate-100 bg-slate-50">
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold"><Bold size={14}/></ToolbarBtn>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic"><Italic size={14}/></ToolbarBtn>
+        <div className="w-px h-4 bg-slate-200 mx-1"/>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} title="Heading 1"><Heading1 size={14}/></ToolbarBtn>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} title="Heading 2"><Heading2 size={14}/></ToolbarBtn>
+        <div className="w-px h-4 bg-slate-200 mx-1"/>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet List"><List size={14}/></ToolbarBtn>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered List"><ListOrdered size={14}/></ToolbarBtn>
+        <ToolbarBtn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')} title="Quote"><Quote size={14}/></ToolbarBtn>
+      </div>
+      {/* Editor area */}
+      <EditorContent
+        editor={editor}
+        className="prose prose-sm max-w-none px-4 py-3 min-h-[140px] text-slate-700 focus-within:outline-none [&_.tiptap]:outline-none [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.tiptap_p.is-editor-empty:first-child::before]:text-slate-400 [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none"
+      />
+    </div>
+  );
+}
 
 function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
@@ -518,7 +575,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
 
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-2"><FileText size={14} /> Description <span className="text-red-500">*</span></label>
-                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-32 sm:h-40 outline-none" placeholder="Add details..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
+                    <RichTextEditor value={formData.description} onChange={val => setFormData({...formData, description: val})} />
                  </div>
 
                  <div>
@@ -673,7 +730,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
             <div className="flex-1 p-4 sm:p-6 md:overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-100">
                  <div className="mb-6">
                     <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase mb-3"><FileText size={14} /> Description</label>
-                    <textarea className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 h-40 outline-none focus:ring-2 focus:ring-yellow-400/50 text-slate-700 resize-none text-sm leading-relaxed" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
+                    <RichTextEditor value={editForm.description} onChange={val => setEditForm({...editForm, description: val})} />
                  </div>
 
                  <div className="mb-8">

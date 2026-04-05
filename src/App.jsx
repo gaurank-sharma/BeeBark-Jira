@@ -201,6 +201,7 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [parentTaskForSubtask, setParentTaskForSubtask] = useState(null);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isManageTeamOpen, setIsManageTeamOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
 
   const fetchTasks = async () => {
@@ -274,6 +275,11 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
         </div>
 
         <div className="flex gap-2 shrink-0">
+          {activeTeam && (
+            <button onClick={() => setIsManageTeamOpen(true)} className="bg-white border border-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm">
+              <Users size={16} /> <span className="hidden sm:inline">Members</span>
+            </button>
+          )}
           <button onClick={() => setIsTeamModalOpen(true)} className="bg-white border border-slate-200 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm">
             <Users size={16} /> <span className="hidden sm:inline">New Team</span>
           </button>
@@ -323,7 +329,8 @@ function BoardView({ currentUser, activeTeam, filter, users, teams, refreshData 
       )}
 
       {isTeamModalOpen && <CreateTeamModal onClose={() => setIsTeamModalOpen(false)} onSuccess={() => { refreshData(); alert("Team Created!"); }} users={users} />}
-      
+      {isManageTeamOpen && activeTeam && <ManageTeamModal team={activeTeam} users={users} onClose={() => setIsManageTeamOpen(false)} onSuccess={refreshData} />}
+
       {/* DETAIL MODAL */}
       {selectedTask && (
         <TaskDetailModal 
@@ -830,7 +837,54 @@ function CreateTeamModal({ onClose, onSuccess, users }) {
             <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button><button type="submit" disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">{loading && <Loader2 className="animate-spin" size={16}/>} Create Team</button></div>
          </form>
       </div>
-      
+
+    </div>
+  );
+}
+
+function ManageTeamModal({ team, users, onClose, onSuccess }) {
+  const [members, setMembers] = useState(team.members?.map(m => m._id || m) || []);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = (id) => setMembers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await axios.put(`${API_URL}/teams/${team._id}/members`, { members });
+      onSuccess();
+      onClose();
+    } catch (err) { alert("Failed to update members."); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in duration-200">
+        <div className="flex justify-between items-center mb-1">
+          <h2 className="text-xl font-bold text-slate-900">Manage Members — {team.name}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={20}/></button>
+        </div>
+        <p className="text-sm text-slate-500 mb-4 flex items-center gap-1">
+          {team.isPrivate ? <><Lock size={12}/> Private — only checked members can see tasks</> : 'Public team — members listed below'}
+        </p>
+        <div className="h-72 overflow-y-auto border border-slate-200 rounded-lg p-2 custom-scrollbar bg-slate-50 mb-4">
+          {users.map(u => (
+            <label key={u._id} className="flex items-center gap-3 p-2.5 hover:bg-slate-200 rounded-lg cursor-pointer transition">
+              <input type="checkbox" checked={members.includes(u._id)} onChange={() => toggle(u._id)} className="accent-slate-900 w-4 h-4"/>
+              <div className="w-7 h-7 rounded-full bg-yellow-400 flex items-center justify-center text-xs font-bold flex-shrink-0">{u.username?.[0]?.toUpperCase()}</div>
+              <span className="text-sm font-medium text-slate-700">{u.username}</span>
+              <span className="text-xs text-slate-400 ml-auto truncate max-w-[120px]">{u.email}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancel</button>
+          <button onClick={handleSave} disabled={loading} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800">
+            {loading && <Loader2 className="animate-spin" size={16}/>} Save Members
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

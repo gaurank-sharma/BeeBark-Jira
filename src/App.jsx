@@ -447,9 +447,8 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
     teamId: getInitialTeamId(),
     pod: getInitialPod(),
     assigneeId: currentUser?._id || '', 
-    reporterId: currentUser?._id || '', 
-    startDate: new Date().toISOString().split('T')[0], 
-    deadline: new Date().toISOString().split('T')[0], 
+    reporterId: currentUser?._id || '',
+    estimatedTime: '',
     files: [],
     taskId: generateTaskId(),
     parentTaskId: parentTask ? parentTask._id : null
@@ -580,10 +579,15 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
                     </select>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase">Timeline <span className="text-red-500">*</span></label>
-                    <input type="date" className="w-full text-sm" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} required />
-                    <input type="date" className="w-full text-sm" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} required />
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estimated Duration</label>
+                    <input
+                        type="text"
+                        className="w-full bg-white border border-slate-200 rounded p-2 text-sm"
+                        placeholder="e.g. 3 days, 1 week, 2 hours"
+                        value={formData.estimatedTime}
+                        onChange={e => setFormData({...formData, estimatedTime: e.target.value})}
+                    />
                 </div>
             </div>
         </div>
@@ -603,8 +607,7 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
      assigneeId: task.assignee?._id || task.assignee || "",
      reporterId: task.reporter?._id || task.reporter || "",
      teamId: task.team?._id || task.team || "",
-     startDate: task.startDate ? task.startDate.split('T')[0] : "",
-     deadline: task.deadline ? task.deadline.split('T')[0] : "",
+     estimatedTime: task.estimatedTime || "",
   });
 
   const handleSave = async () => {
@@ -764,16 +767,15 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                     </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Timeline</label>
-                      <div className="mb-2">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Start Date</label>
-                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.startDate} onChange={e => setEditForm({...editForm, startDate: e.target.value})} required />
-                      </div>
-                      <div className="pt-2 border-t border-slate-100">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Due Date</label>
-                        <input type="date" className="w-full text-sm font-bold text-slate-700 outline-none" value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} required />
-                      </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estimated Duration</label>
+                    <input
+                        type="text"
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-medium"
+                        placeholder="e.g. 3 days, 1 week, 2 hours"
+                        value={editForm.estimatedTime}
+                        onChange={e => setEditForm({...editForm, estimatedTime: e.target.value})}
+                    />
                 </div>
 
                 <div>

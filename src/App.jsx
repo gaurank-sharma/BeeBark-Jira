@@ -700,9 +700,11 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                                 if (safeUrl && safeUrl.startsWith('http://')) safeUrl = safeUrl.replace('http://', 'https://');
                                 const isPdf = file.name?.toLowerCase().endsWith('.pdf') || file.format === 'application/pdf';
                                 const isImage = file.format?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name || '');
-                                const viewUrl = safeUrl;
+                                const downloadUrl = safeUrl.includes('/upload/')
+                                    ? safeUrl.replace('/upload/', '/upload/fl_attachment/')
+                                    : safeUrl;
                                 return (
-                                    <a key={idx} href={viewUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition group bg-white">
+                                    <div key={idx} className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg bg-white">
                                         {isImage ? (
                                             <img src={safeUrl} alt={file.name} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
                                         ) : (
@@ -710,10 +712,17 @@ function TaskDetailModal({ task, onClose, onUpdate, users, teams, onCreateSubtas
                                         )}
                                         <div className="overflow-hidden flex-1">
                                             <div className="text-sm font-bold text-slate-700 truncate">{file.name}</div>
-                                            {isPdf && <div className="text-xs text-slate-400">PDF — click to view</div>}
+                                            <div className="text-xs text-slate-400">{isPdf ? 'PDF' : isImage ? 'Image' : 'File'}</div>
                                         </div>
-                                        <ExternalLink size={14} className="flex-shrink-0 ml-auto text-slate-300 group-hover:text-slate-600"/>
-                                    </a>
+                                        <div className="flex gap-1 flex-shrink-0">
+                                            <a href={safeUrl} target="_blank" rel="noopener noreferrer" title="Preview" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition">
+                                                <ExternalLink size={14}/>
+                                            </a>
+                                            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download={file.name} title="Download" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition">
+                                                <Download size={14}/>
+                                            </a>
+                                        </div>
+                                    </div>
                                 );
                             })}
                         </div>

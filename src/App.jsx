@@ -462,8 +462,6 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
     if (!formData.description) missingFields.push("Description");
     if (!formData.teamId) missingFields.push("Team");
     if (!formData.reporterId) missingFields.push("Reporter");
-    if (!formData.startDate) missingFields.push("Start Date");
-    if (!formData.deadline) missingFields.push("Due Date");
 
     if (missingFields.length > 0) {
         alert(`Please fill mandatory fields:\n- ${missingFields.join('\n- ')}`);
@@ -575,7 +573,7 @@ function CreateTaskModal({ onClose, onSuccess, currentUser, users: propUsers, te
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Reporter <span className="text-red-500">*</span></label>
                     <select className="w-full bg-white border border-slate-200 rounded p-2 text-sm" value={formData.reporterId} onChange={e => setFormData({...formData, reporterId: e.target.value})}>
-                         {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        {teamMembers.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
                     </select>
                 </div>
 
